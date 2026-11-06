@@ -17,8 +17,9 @@ export function buildActivity(rows: Row[], unit: string, threshold: string | nul
   for (const r of rows) {
     amounts.set(r.key, r.amount);
     const what = `${r.invoiceNumber ?? 'an invoice'} from ${r.vendorName}`;
-    const received = r.record?.received_at ?? r.ledger?.statuses[0]?.at ?? null;
-    if (received) out.push({ at: received, rowKey: r.key, tone: 'plain', text: `Read ${what}` });
+    // One row per invoice hash; every run that read it is kept here, the later ones as "Read again".
+    r.readsAt.forEach((at, i) => out.push({ at, rowKey: r.key, tone: 'plain', text: `${i === 0 ? 'Read' : 'Read again'} ${what}` }));
+    const received = r.receivedAt;
 
     const p = r.payment;
     if (p) {

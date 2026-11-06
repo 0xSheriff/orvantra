@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: 'Invoice' };
 export default async function InvoiceDetail({ params }: { params: Promise<{ key: string }> }) {
   const { key } = await params;
   const d = await getData();
-  const row = d.rows.find((r) => r.key === key);
+  // Older runs of the same invoice were folded into one row; their keys (e.g. a fresh upload link) still resolve.
+  const row = d.rows.find((r) => r.key === key) ?? d.rows.find((r) => r.aliases.includes(key));
   if (!row) notFound();
   const v = reviewView(row, d);
   return (

@@ -2,7 +2,7 @@ import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { alreadyProposed, readLedger, upsert, writeLedger } from '../src/ledger.ts';
+import { alreadyProposed, ledgerCreatedAt, readLedger, upsert, writeLedger } from '../src/ledger.ts';
 
 const T0 = new Date('2026-11-06T10:00:00Z');
 const T1 = new Date('2026-11-06T10:01:00Z');
@@ -19,6 +19,16 @@ describe('ledger', () => {
       { at: T0.toISOString(), status: 'analyzed:propose' },
       { at: T1.toISOString(), status: 'Paid', detail: 'ok' },
     ]);
+  });
+
+  it('created_at is set once on creation and kept; legacy entries fall back to the first status', () => {
+    const l1 = upsert({}, 'h', { file: 'f' }, { status: 'dry-run' }, T0);
+    const l2 = upsert(l1, 'h', { file: 'f', created_at: 'ignored' }, { status: 'proposed' }, T1);
+    expect(l2.h.created_at).toBe(T0.toISOString());
+    expect(ledgerCreatedAt(l2.h)).toBe(T0.toISOString());
+    const legacy = { ...l2.h, created_at: undefined, statuses: [{ at: T1.toISOString(), status: 'x' }] };
+    expect(ledgerCreatedAt(legacy)).toBe(T1.toISOString());
+    expect(ledgerCreatedAt({ ...legacy, statuses: [] })).toBeNull();
   });
 
   it('alreadyProposed only for the same network + treasury and only once a tx was sent', () => {

@@ -13,7 +13,15 @@ export interface Row {
   vendorName: string;
   vendorAccount: string | null;
   invoiceNumber: string | null;
+  /** When the invoice arrived: ledger created time, else the upload time (web runs), else on-chain created_at. */
   receivedAt: string | null;
+  /** Where receivedAt came from: the agent (ledger / web upload) or the treasury (on-chain created_at). */
+  receivedSource: 'agent' | 'chain' | null;
+  invoiceHash: string | null;
+  /** Every time the agent read this invoice hash (oldest first), across all runs folded into this row. */
+  readsAt: string[];
+  /** Keys of other rows for the same invoice hash that were folded into this one. */
+  aliases: string[];
   category: Category;
   state: ReviewState;
   outcome: string;
@@ -105,9 +113,21 @@ export function verdictFor(row: Row, ctx: ChainContext): Verdict {
   return buildVerdict(factsFor(row, ctx));
 }
 
-function vendorNameOf(acct: string | null, rec: InvoiceRecord | null, ctx: ChainContext): string {
-  return rec?.invoice?.vendor_name || (acct ? ctx.registry.get(acct)?.display_name : null) || rec?.registry_entry?.display_name || acct || 'Unknown vendor';
+/**
+ * The name read from the invoice, unless it is missing or just the account id; then the registry display name;
+ * then a name read by another run of the same invoice (`readNames`); then the account id.
+ */
+export function vendorNameOf(acct: string | null, rec: InvoiceRecord | null, ctx: ChainContext, readNames: (string | null | undefined)[] = []): string {
+  const useful = (n: string | null | undefined): n is string => !!n && n.trim() !== '' && n.trim() !== acct;
+  const read = rec?.invoice?.vendor_name;
+  if (useful(read)) return read;
+  const reg = (acct ? ctx.registry.get(acct)?.display_name : null) || rec?.registry_entry?.display_name;
+  if (useful(reg)) return reg;
+  return readNames.find(useful) ?? acct ?? 'Unknown vendor';
 }
+
+/** When the agent first saw a ledger entry: `created_at`, else its first status (older ledgers). */
+export const ledgerCreatedAt = (l: LedgerEntry): string | null => l.created_at ?? l.statuses[0]?.at ?? null;
 
 /**
  * One row per on-chain payment (with the upload record that proposed it, or a read-only record of the same
@@ -130,12 +150,19 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
     const led = ledg.find((l) => l.invoice_hash === p.invoice_hash) ?? null;
     if (led) usedLedger.add(led.invoice_hash);
     const state = stateOfPayment(p);
+    const ledAt = led ? ledgerCreatedAt(led) : null;
+    const chainAt = nsToIso(p.created_at);
     const row: Row = {
       key: `p${p.id}`,
       vendorName: vendorNameOf(p.vendor, rec, ctx),
       vendorAccount: p.vendor,
       invoiceNumber: rec?.invoice?.invoice_number || p.memo || led?.invoice_number || null,
-      receivedAt: rec?.received_at ?? led?.statuses[0]?.at ?? nsToIso(p.created_at),
+      receivedAt: ledAt ?? chainAt,
+      receivedSource: ledAt ? 'agent' : chainAt ? 'chain' : null,
+      invoiceHash: p.invoice_hash,
+      readsAt: [ledAt, ...recs.filter((r) => r.invoice_hash === p.invoice_hash && usedRecords.has(r.id)).map((r) => r.received_at)]
+        .filter((x): x is string => !!x),
+      aliases: [],
       category: categoryOf(state),
       state,
       outcome: '',
@@ -162,6 +189,10 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
       vendorAccount: acct,
       invoiceNumber: r.invoice?.invoice_number || null,
       receivedAt: r.received_at,
+      receivedSource: 'agent',
+      invoiceHash: r.invoice_hash ?? null,
+      readsAt: [r.received_at],
+      aliases: [],
       category: categoryOf(state),
       state,
       outcome: '',
@@ -182,6 +213,9 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
 
   for (const l of ledg) {
     if (usedLedger.has(l.invoice_hash) || l.payment_id != null) continue;
+    // The ledger entry of a web upload that has its own record row is the same run, not another invoice.
+    if (l.upload_id && recs.some((r) => r.id === l.upload_id)) continue;
+    const ledAt = ledgerCreatedAt(l);
     const last = l.statuses.at(-1)?.status ?? '';
     const state: ReviewState = l.decision === 'reject' || last === 'quote:invalid' || last === 'tx-failed' ? 'stopped' : 'not-sent';
     rows.push({
@@ -189,7 +223,11 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
       vendorName: vendorNameOf(l.vendor, null, ctx),
       vendorAccount: l.vendor,
       invoiceNumber: l.invoice_number,
-      receivedAt: l.statuses[0]?.at ?? null,
+      receivedAt: ledAt,
+      receivedSource: ledAt ? 'agent' : null,
+      invoiceHash: l.invoice_hash,
+      readsAt: ledAt ? [ledAt] : [],
+      aliases: [],
       category: categoryOf(state),
       state,
       outcome: l.decision === 'reject' ? 'Stopped — rejected by the agent' : last === 'dry-run' ? 'Not sent — dry run' : `Stopped — ${last || 'not sent'}`,
@@ -202,7 +240,35 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
     });
   }
 
-  return rows.sort((a, b) => (b.receivedAt ?? '').localeCompare(a.receivedAt ?? ''));
+  return dedupeByHash(rows, ctx).sort((a, b) => (b.receivedAt ?? '').localeCompare(a.receivedAt ?? ''));
+}
+
+const lastRead = (r: Row): string => r.readsAt.reduce((m, x) => (x > m ? x : m), r.receivedAt ?? '');
+
+/**
+ * One row per invoice hash. An on-chain payment wins (it is the invoice's real outcome); otherwise the row from the
+ * newest run wins. The winner keeps every read time, the other rows' keys as aliases, and a better vendor name
+ * (registry, or read by another run) when its own is missing or just the account id.
+ */
+export function dedupeByHash(rows: Row[], ctx: ChainContext): Row[] {
+  const groups = new Map<string, Row[]>();
+  const out: Row[] = [];
+  for (const r of rows) {
+    if (!r.invoiceHash) { out.push(r); continue; }
+    const g = groups.get(r.invoiceHash);
+    if (g) g.push(r); else groups.set(r.invoiceHash, [r]);
+  }
+  for (const g of groups.values()) {
+    if (g.length === 1) { out.push(g[0]); continue; }
+    const [win, ...rest] = [...g].sort((a, b) => Number(!!b.payment) - Number(!!a.payment) || lastRead(b).localeCompare(lastRead(a)));
+    out.push({
+      ...win,
+      vendorName: vendorNameOf(win.vendorAccount, win.record, ctx, g.map((r) => r.record?.invoice?.vendor_name)),
+      readsAt: [...new Set(g.flatMap((r) => r.readsAt))].sort(),
+      aliases: [...win.aliases, ...rest.flatMap((r) => [r.key, ...r.aliases])],
+    });
+  }
+  return out;
 }
 
 export function counts(rows: Row[]): Record<'all' | Category, number> {
