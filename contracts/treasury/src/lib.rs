@@ -28,7 +28,7 @@ use near_sdk::{
     BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, PromiseError, PromiseOrValue,
 };
 
-pub use policy::{Payout, RegistryVendor, VendorPolicy};
+pub use policy::{InitialVendorPolicy, Payout, RegistryVendor, VendorPolicy};
 use policy::{Decision, DecideInput, ProposalCheck};
 
 pub const EVENT_STANDARD: &str = "orvantra_treasury";
@@ -176,7 +176,11 @@ pub struct Treasury {
 
 #[near]
 impl Treasury {
+    /// `initial_vendor_policies` (optional, <= 50, no duplicates, limits > 0) lets the deployer
+    /// approve vendors at init so the owner's wallet does not have to sign setup transactions.
+    /// Each emits `vendor_policy_set`, exactly like `set_vendor_policy`.
     #[init]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         owner: AccountId,
         agent: AccountId,
@@ -186,12 +190,16 @@ impl Treasury {
         monthly_cap: U128,
         min_payout_age_sec: u64,
         storage_deposit: Option<U128>,
+        initial_vendor_policies: Option<Vec<InitialVendorPolicy>>,
     ) -> Self {
         require!(owner != agent, "agent must be a different account from owner");
         let storage_deposit = storage_deposit.map(|d| d.0).unwrap_or(DEFAULT_STORAGE_DEPOSIT);
         policy::validate_storage_deposit(storage_deposit, MAX_STORAGE_DEPOSIT)
             .unwrap_or_else(|e| env::panic_str(&e));
-        Self {
+        let initial_vendor_policies = initial_vendor_policies.unwrap_or_default();
+        policy::validate_initial_vendor_policies(&initial_vendor_policies)
+            .unwrap_or_else(|e| env::panic_str(&e));
+        let mut t = Self {
             owner,
             agent,
             registry,
@@ -208,7 +216,11 @@ impl Treasury {
             paid_vendors: LookupSet::new(StorageKey::PaidVendors),
             vendor_spent: LookupMap::new(StorageKey::VendorSpent),
             total_spent: LookupMap::new(StorageKey::TotalSpent),
+        };
+        for p in initial_vendor_policies {
+            t.insert_vendor_policy(p.vendor, p.max_per_invoice, p.monthly_cap);
         }
+        t
     }
 
     // ---------------------------------------------------------------- agent
@@ -405,13 +417,9 @@ impl Treasury {
     #[payable]
     pub fn set_vendor_policy(&mut self, vendor: AccountId, max_per_invoice: U128, monthly_cap: U128) {
         self.assert_owner_full_access();
-        require!(max_per_invoice.0 > 0 && monthly_cap.0 > 0, "limits must be > 0");
-        let policy = VendorPolicy { max_per_invoice, monthly_cap };
-        emit(
-            "vendor_policy_set",
-            json!({ "vendor": vendor, "max_per_invoice": max_per_invoice, "monthly_cap": monthly_cap }),
-        );
-        self.policies.insert(vendor, policy);
+        policy::validate_vendor_limits(max_per_invoice.0, monthly_cap.0)
+            .unwrap_or_else(|e| env::panic_str(&e));
+        self.insert_vendor_policy(vendor, max_per_invoice, monthly_cap);
     }
 
     #[payable]
@@ -615,6 +623,15 @@ impl Treasury {
     fn assert_owner_full_access(&self) {
         self.assert_owner();
         assert_one_yocto();
+    }
+
+    /// Store a (validated) vendor policy and emit `vendor_policy_set`.
+    fn insert_vendor_policy(&mut self, vendor: AccountId, max_per_invoice: U128, monthly_cap: U128) {
+        emit(
+            "vendor_policy_set",
+            json!({ "vendor": vendor, "max_per_invoice": max_per_invoice, "monthly_cap": monthly_cap }),
+        );
+        self.policies.insert(vendor, VendorPolicy { max_per_invoice, monthly_cap });
     }
 
     fn payment(&self, id: u64) -> Payment {
