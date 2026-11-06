@@ -27,6 +27,8 @@ export interface LedgerEntry {
   deposit_address?: string | null;
   payment_id?: number | null;
   tx_hash?: string | null;
+  /** Web upload record id (agent/data/files/<id>.json), when the invoice came through the web app. */
+  upload_id?: string;
   statuses: LedgerStatus[];
 }
 

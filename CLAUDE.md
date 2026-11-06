@@ -11,7 +11,9 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
 - `scripts/testnet-day5.sh` — Day 5 testnet walkthrough: treasury v2, restricted agent key, `npm run pay` (run manually).
 - `agent/` — TypeScript service (Node 24): invoice extraction by two NEAR AI Cloud readers, checks, 1Click payments (Day 4-5).
   Invoice content goes ONLY to NEAR AI Cloud — never to Fortytwo or any other service.
-- `web/` — Next.js UI (Day 6).
+- `web/` — Next.js owner app (Day 6a): annotated review, invoices, vendors, rules, activity, wallet approvals.
+  Imports the agent's light modules via `orvantra-agent` (file:../agent); uploads run `agent/src/web-run.ts` in a
+  child process. See `web/README.md`. Tests: `cd web && npm test`; `npm run build`, `npm run lint`.
 
 ## Toolchain (installed)
 - Rust 1.99 + `wasm32-unknown-unknown`, `cargo near` 0.23, `near` CLI (near-cli-rs 0.31), Node 22.

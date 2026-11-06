@@ -4,6 +4,9 @@
   "private": true,
   "description": "Orvantra invoice-reading agent: dual NEAR AI Cloud readers, checks against on-chain registry and treasury policy",
   "type": "module",
+  "exports": {
+    "./*": "./src/*.ts"
+  },
   "engines": {
     "node": ">=24.22.1"
   },
@@ -13,6 +16,7 @@
     "fixtures": "tsx scripts/make-fixtures.ts",
     "chain-state": "tsx scripts/chain-state.ts",
     "pay": "tsx src/pay.ts",
+    "web-run": "tsx src/web-run.ts",
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
     "prove-key-limits": "tsx scripts/prove-key-limits.ts",
     "quote": "tsx scripts/quote.ts",
