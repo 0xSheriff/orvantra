@@ -1,7 +1,6 @@
 [workspace]
 resolver = "2"
-# contracts/treasury will be added here on Day 3.
-members = ["contracts/vendor-registry"]
+members = ["contracts/vendor-registry", "contracts/treasury", "contracts/test-token"]
 
 [workspace.package]
 edition = "2021"
@@ -9,6 +8,7 @@ license = "MIT"
 
 [workspace.dependencies]
 near-sdk = "5.30"
+near-contract-standards = "5.30"
 near-workspaces = "0.24"
 serde_json = "1"
 tokio = { version = "1", features = ["full"] }
