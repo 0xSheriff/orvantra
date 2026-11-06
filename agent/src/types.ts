@@ -1,5 +1,9 @@
+import type { Boxes } from './boxes.ts';
+
 /** What one reader (model) returns, exactly as the strict JSON schema defines it. */
 export interface Extraction {
+  /** Reader A only: normalized boxes of key regions on page 1 (UI overlays only, never used for decisions). */
+  boxes?: Boxes | null;
   vendor_name: string;
   vendor_near_account: string | null;
   invoice_number: string;

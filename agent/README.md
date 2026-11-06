@@ -187,6 +187,17 @@ the duplicate hash anyway; this saves the key's allowance).
 | `… 05-acme-duplicate.png --execute` | `REJECTED by the agent — invoice_hash already used …`, no transaction |
 | `npm run prove-key-limits` | 4/4 PASS table |
 
+## Web app hooks (Day 6a)
+- `src/payflow.ts`: the `pay` pipeline as a function with `log` / `step` hooks; `src/pay.ts` is now a thin CLI over it
+  (same output and exit codes).
+- `src/web-run.ts` (`npm run web-run -- <file> --id <id> [--execute | --analyze-only]`): what the web app spawns per
+  upload. Prints NDJSON progress and writes `data/files/<id>.json` (`src/records.ts`) next to the original and a page-1
+  image.
+- Reader A (Qwen3-VL) also returns optional **region boxes** (`src/boxes.ts`): invoice number, total, vendor block,
+  payment text, as `[x0,y0,x1,y1]`. The model answers in its native 0..1000 grounding scale and the agent stores them
+  normalized to 0..1. They are for UI overlays only, never used in a decision, and dropped if malformed.
+  `READER_A_BOXES=0` turns them off.
+
 ## Files
 - `src/extract.ts`: page loading (PDF → PNG via pdf-to-img/pdfjs), prompt, strict JSON schema, readers, receipts.
 - `src/normalize.ts`, `src/compare.ts`, `src/hash.ts`, `src/checks.ts`: pure logic.

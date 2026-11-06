@@ -2,7 +2,7 @@
 // Read-only: nothing is written on-chain.
 import { decide, type CheckInput, type Decision } from './checks.ts';
 import { compareReadings, type Comparison } from './compare.ts';
-import { readInvoice, type InvoiceReading } from './extract.ts';
+import { readInvoice, type InvoiceReading, type PageImage } from './extract.ts';
 import { invoiceHash } from './hash.ts';
 import * as near from './near.ts';
 import { isValidNearAccount, normalizeExtraction } from './normalize.ts';
@@ -60,10 +60,15 @@ export interface AnalyzeOptions {
   /** invoice_hash -> file, for duplicate detection within a batch. */
   seenHashes?: Map<string, string>;
   now?: Date;
+  /** Called with the page images (PDFs rendered to PNG) before they are sent to the readers. */
+  onPages?: (pages: PageImage[]) => void | Promise<void>;
+  /** Called after both readers answered, before the NEAR views are read. */
+  onRead?: (reading: InvoiceReading) => void;
 }
 
 export async function analyzeInvoice(file: string, opts: AnalyzeOptions = {}): Promise<Analysis> {
-  const reading = await readInvoice(file);
+  const reading = await readInvoice(file, undefined, opts.onPages);
+  opts.onRead?.(reading);
   const normalized = reading.readers.map((r) => (r.extraction ? normalizeExtraction(r.extraction) : null));
   const comparison = compareReadings(normalized[0], normalized[1]);
   const inv = comparison.agreed;
