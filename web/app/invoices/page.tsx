@@ -51,7 +51,9 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
               </td>
               <td>
                 <span className="mono">{r.invoiceNumber ?? '—'}</span>
-                <div className="s">received {fmtWhen(r.receivedAt)}</div>
+                <div className="s" title={r.receivedSource === 'chain' ? 'Time the treasury recorded the payment' : 'Time the agent first read the invoice'}>
+                  {r.receivedSource === 'chain' ? 'on-chain' : 'received'} {fmtWhen(r.receivedAt)}
+                </div>
               </td>
               <td><span className={`st ${TONE[r.category]}`}>{r.outcome}</span></td>
               <td className="s">{r.route ?? '—'}</td>

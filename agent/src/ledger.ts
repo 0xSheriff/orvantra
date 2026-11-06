@@ -29,8 +29,13 @@ export interface LedgerEntry {
   tx_hash?: string | null;
   /** Web upload record id (agent/data/files/<id>.json), when the invoice came through the web app. */
   upload_id?: string;
+  /** When the agent first saw this invoice (set on creation; older entries fall back to statuses[0].at). */
+  created_at?: string;
   statuses: LedgerStatus[];
 }
+
+/** When the agent first saw this invoice: `created_at`, else the first status time (older entries). */
+export const ledgerCreatedAt = (e: LedgerEntry): string | null => e.created_at ?? e.statuses[0]?.at ?? null;
 
 export type Ledger = Record<string, LedgerEntry>;
 
@@ -56,9 +61,10 @@ export function writeLedger(path: string, ledger: Ledger): void {
 export function upsert(ledger: Ledger, hash: string, patch: Partial<LedgerEntry> & Pick<LedgerEntry, 'file'>, status?: Omit<LedgerStatus, 'at'>, now = new Date()): Ledger {
   const prev = ledger[hash];
   const base: LedgerEntry = prev ?? {
-    invoice_hash: hash, file: patch.file, network: '', treasury: '', vendor: null, amount: null, invoice_number: null, decision: '', statuses: [],
+    invoice_hash: hash, file: patch.file, network: '', treasury: '', vendor: null, amount: null, invoice_number: null, decision: '',
+    created_at: now.toISOString(), statuses: [],
   };
-  const next: LedgerEntry = { ...base, ...patch, invoice_hash: hash, statuses: [...base.statuses] };
+  const next: LedgerEntry = { ...base, ...patch, invoice_hash: hash, created_at: base.created_at, statuses: [...base.statuses] };
   if (status) next.statuses.push({ at: now.toISOString(), ...status });
   return { ...ledger, [hash]: next };
 }

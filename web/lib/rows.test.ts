@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { Payment } from 'orvantra-agent/near';
 import type { InvoiceRecord } from 'orvantra-agent/records';
 import type { LedgerEntry } from 'orvantra-agent/ledger';
+import { buildActivity } from './activity';
 import { buildRows, counts, factsFor, type ChainContext } from './rows';
 
 const ctx: ChainContext = {
@@ -43,8 +44,15 @@ describe('buildRows', () => {
     expect(factsFor(r, ctx).agentFindings.some((m) => m.includes('duplicate'))).toBe(false);
   });
 
-  it('a rejected upload is its own stopped row; a duplicate upload keeps its duplicate finding', () => {
+  it('a rejected duplicate upload of a paid-for invoice folds into the payment row (one row per hash)', () => {
     const dup = record({ id: '1793998400000-00000001', mode: 'execute', outcome: 'rejected', invoice_hash: 'h3', decision: { ...record({}).decision!, findings: [{ level: 'reject', message: 'invoice_hash already used in the treasury (duplicate invoice)' }] } });
+    const rows = buildRows([payment({})], [], [dup], ctx);
+    expect(rows.map((r) => r.key)).toEqual(['p3']);
+    expect(rows[0]).toMatchObject({ category: 'held', aliases: ['u1793998400000-00000001'], readsAt: ['2026-11-06T20:00:00.000Z'] });
+  });
+
+  it('a rejected upload with no payment is its own stopped row', () => {
+    const dup = record({ id: '1793998400000-00000001', mode: 'execute', outcome: 'already-proposed', invoice_hash: 'h4' });
     const rows = buildRows([payment({})], [], [dup], ctx);
     expect(rows.map((r) => r.key)).toEqual(['u1793998400000-00000001', 'p3']);
     expect(rows[0]).toMatchObject({ category: 'stopped', outcome: 'Stopped — duplicate invoice', route: null });
@@ -57,10 +65,89 @@ describe('buildRows', () => {
     ];
     const rows = buildRows([payment({ id: 0, invoice_hash: 'h0', status: 'Paid', reasons: [] })], led, [], ctx);
     expect(rows.map((r) => [r.key, r.outcome])).toEqual([
-      ['p0', 'Paid automatically'], // created 2026-11-06 21:13 UTC, newest first
+      ['p0', 'Paid automatically'], // created 2026-11-06 18:33 UTC, newest first
       ['lh9', 'Stopped — rejected by the agent'],
     ]);
     expect(rows[1].fixtureFile).toBe('07-unknown-vendor.png');
     expect(counts(rows)).toEqual({ all: 2, held: 0, paid: 1, stopped: 1 });
+  });
+});
+
+describe('dedupe by invoice hash', () => {
+  const GX = 'gx-hash';
+  const gxRecord = record({
+    id: '1794005760000-0000gx01', received_at: '2026-11-06T21:56:00.000Z', mode: 'execute', outcome: 'rejected', invoice_hash: GX,
+    decision: { ...record({}).decision!, invoice_hash: GX, findings: [{ level: 'reject', message: 'vendor is not in the registry' }] },
+    invoice: { ...record({}).invoice!, vendor_name: 'Globex Corp', vendor_account: 'globex-unknown.testnet', invoice_number: 'GX-5521', amount_base_units: '75000000' },
+  });
+  const gxLedger: LedgerEntry = {
+    invoice_hash: GX, file: '07-unknown-vendor.png', network: 'testnet', treasury: 't.testnet', vendor: 'globex-unknown.testnet', amount: '75000000',
+    invoice_number: 'GX-5521', decision: 'reject', statuses: [{ at: '2026-11-06T21:57:00.000Z', status: 'analyzed:reject' }],
+  };
+
+  it('two runs of GX-5521 become one row: newest outcome, name read from the invoice, both reads kept', () => {
+    const rows = buildRows([], [gxLedger], [gxRecord], ctx);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      key: `l${GX.slice(0, 16)}`, vendorName: 'Globex Corp', vendorAccount: 'globex-unknown.testnet', outcome: 'Stopped — rejected by the agent',
+      receivedAt: '2026-11-06T21:57:00.000Z', aliases: ['u1794005760000-0000gx01'], readsAt: ['2026-11-06T21:56:00.000Z', '2026-11-06T21:57:00.000Z'],
+    });
+    const reads = buildActivity(rows, 'tUSDC').filter((e) => e.text.startsWith('Read'));
+    expect(reads.map((e) => [e.at, e.text])).toEqual([
+      ['2026-11-06T21:57:00.000Z', 'Read again GX-5521 from Globex Corp'],
+      ['2026-11-06T21:56:00.000Z', 'Read GX-5521 from Globex Corp'],
+    ]);
+    expect(buildActivity(rows, 'tUSDC').filter((e) => e.tone === 'rej')).toHaveLength(1);
+  });
+
+  it('newest run wins regardless of input order', () => {
+    const newer = { ...gxRecord, id: '1794009999999-0000gx02', received_at: '2026-11-06T22:30:00.000Z', outcome: 'analyzed' };
+    const rows = buildRows([], [gxLedger], [newer, gxRecord], ctx);
+    expect(rows.map((r) => r.key)).toEqual(['u1794009999999-0000gx02']);
+    expect(rows[0].readsAt).toHaveLength(3);
+  });
+
+  it('a vendor name that is just the account id falls back to the registry display name', () => {
+    const led = { ...gxLedger, invoice_hash: 'hA', vendor: 'acme.testnet' };
+    expect(buildRows([], [led], [], ctx)[0].vendorName).toBe('Acme');
+    const rec = record({ outcome: 'rejected', invoice_hash: 'hB', invoice: { ...record({}).invoice!, vendor_name: 'acme.testnet' } });
+    expect(buildRows([], [], [rec], ctx)[0].vendorName).toBe('Acme');
+    expect(buildRows([], [gxLedger], [], ctx)[0].vendorName).toBe('globex-unknown.testnet'); // nothing better known
+  });
+
+  it('a web upload and its own ledger entry are one run, one row', () => {
+    const led = { ...gxLedger, upload_id: gxRecord.id, statuses: [{ at: '2026-11-06T21:56:05.000Z', status: 'analyzed:reject' }] };
+    const rows = buildRows([], [led], [gxRecord], ctx);
+    expect(rows.map((r) => r.key)).toEqual(['u1794005760000-0000gx01']);
+    expect(rows[0].readsAt).toEqual(['2026-11-06T21:56:00.000Z']);
+  });
+});
+
+describe('received time', () => {
+  const T_CHAIN = '1793990000000000000'; // 2026-11-06T18:33:20Z
+  const led = (o: Partial<LedgerEntry>): LedgerEntry => ({
+    invoice_hash: 'h3', file: 'b.png', network: 'testnet', treasury: 't.testnet', vendor: 'acme.testnet', amount: '80000000', invoice_number: 'B-1',
+    decision: 'propose', payment_id: 3, statuses: [{ at: '2026-11-06T16:31:00.000Z', status: 'dry-run' }, { at: '2026-11-06T16:39:00.000Z', status: 'proposed' }], ...o,
+  });
+
+  it('comes from the ledger created time when present', () => {
+    const [r] = buildRows([payment({ created_at: T_CHAIN })], [led({ created_at: '2026-11-06T16:30:00.000Z' })], [], ctx);
+    expect(r).toMatchObject({ receivedAt: '2026-11-06T16:30:00.000Z', receivedSource: 'agent' });
+  });
+
+  it('older ledger entries without created_at use their first status', () => {
+    const [r] = buildRows([payment({ created_at: T_CHAIN })], [led({})], [], ctx);
+    expect(r).toMatchObject({ receivedAt: '2026-11-06T16:31:00.000Z', receivedSource: 'agent' });
+  });
+
+  it('without a ledger entry it is the on-chain created_at — never a later read-only upload of the same invoice', () => {
+    const [r] = buildRows([payment({ created_at: T_CHAIN })], [], [record({ received_at: '2026-11-06T23:00:00.000Z' })], ctx);
+    expect(r).toMatchObject({ receivedAt: '2026-11-06T18:33:20.000Z', receivedSource: 'chain' });
+    expect(r.readsAt).toEqual(['2026-11-06T23:00:00.000Z']);
+  });
+
+  it('upload-only and ledger-only rows use their own time', () => {
+    const rows = buildRows([], [led({ invoice_hash: 'h7', payment_id: null, created_at: '2026-11-06T10:00:00.000Z' })], [record({ invoice_hash: 'h8' })], ctx);
+    expect(rows.map((r) => [r.receivedAt, r.receivedSource])).toEqual([['2026-11-06T20:00:00.000Z', 'agent'], ['2026-11-06T10:00:00.000Z', 'agent']]);
   });
 });
