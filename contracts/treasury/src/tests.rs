@@ -103,6 +103,7 @@ fn setup() -> Treasury {
         U128(TREASURY_CAP),
         MIN_AGE_SEC,
         None,
+        None,
     );
     as_caller(OWNER, 1, NOW);
     t.set_vendor_policy(acc(ACME), U128(500_000_000), U128(800_000_000));
@@ -387,7 +388,7 @@ fn ft_refund_amount_by_token() {
 #[should_panic(expected = "agent must be a different account from owner")]
 fn init_rejects_agent_equal_owner() {
     as_caller(OWNER, 0, NOW);
-    Treasury::new(acc(OWNER), acc(OWNER), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, None);
+    Treasury::new(acc(OWNER), acc(OWNER), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, None, None);
 }
 
 #[test]
@@ -1054,6 +1055,7 @@ fn storage_deposit_default_and_custom() {
         U128(1),
         0,
         Some(U128(42)),
+        None,
     );
     assert_eq!(t2.get_config().storage_deposit.0, 42);
 }
@@ -1062,7 +1064,131 @@ fn storage_deposit_default_and_custom() {
 #[should_panic(expected = "storage_deposit must be in")]
 fn storage_deposit_zero_rejected_at_init() {
     as_caller(OWNER, 0, NOW);
-    Treasury::new(acc(OWNER), acc(AGENT), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, Some(U128(0)));
+    Treasury::new(acc(OWNER), acc(AGENT), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, Some(U128(0)), None);
+}
+
+// ======================================================================= initial vendor policies
+
+fn ivp(vendor: &str, max: u128, cap: u128) -> InitialVendorPolicy {
+    InitialVendorPolicy { vendor: acc(vendor), max_per_invoice: U128(max), monthly_cap: U128(cap) }
+}
+
+fn new_with_policies(list: Option<Vec<InitialVendorPolicy>>) -> Treasury {
+    as_caller(OWNER, 0, NOW);
+    Treasury::new(
+        acc(OWNER),
+        acc(AGENT),
+        acc(REGISTRY),
+        acc(TOKEN),
+        U128(THRESHOLD),
+        U128(TREASURY_CAP),
+        MIN_AGE_SEC,
+        None,
+        list,
+    )
+}
+
+#[test]
+fn init_without_policies_has_none() {
+    let t = new_with_policies(None);
+    assert_eq!(t.get_vendor_policy(acc(ACME)), None);
+    assert!(event_names().is_empty());
+    let t = new_with_policies(Some(vec![]));
+    assert_eq!(t.get_vendor_policy(acc(ACME)), None);
+}
+
+#[test]
+fn init_sets_policies_and_emits_events() {
+    let t = new_with_policies(Some(vec![ivp(ACME, 500, 800), ivp("globex.testnet", 7, 9)]));
+    assert_eq!(t.get_vendor_policy(acc(ACME)), Some(policy(500, 800)));
+    assert_eq!(t.get_vendor_policy(acc("globex.testnet")), Some(policy(7, 9)));
+    let ev = events();
+    assert_eq!(ev.len(), 2);
+    assert_eq!(ev[0]["event"], "vendor_policy_set");
+    assert_eq!(ev[0]["standard"], EVENT_STANDARD);
+    assert_eq!(ev[0]["data"][0]["vendor"], ACME);
+    assert_eq!(ev[0]["data"][0]["max_per_invoice"], "500");
+    assert_eq!(ev[0]["data"][0]["monthly_cap"], "800");
+    assert_eq!(ev[1]["data"][0]["vendor"], "globex.testnet");
+}
+
+#[test]
+fn init_policies_event_matches_set_vendor_policy() {
+    new_with_policies(Some(vec![ivp(ACME, 500, 800)]));
+    let from_init = events();
+    let mut t = new_with_policies(None);
+    as_caller(OWNER, 1, NOW);
+    t.set_vendor_policy(acc(ACME), U128(500), U128(800));
+    assert_eq!(events(), from_init);
+}
+
+#[test]
+fn init_policy_lets_agent_propose() {
+    let mut t = new_with_policies(Some(vec![ivp(ACME, 500_000_000, 800_000_000)]));
+    let id = propose(&mut t, "h1", 10_000_000);
+    assert_eq!(t.get_payment(id).unwrap().status, PaymentStatus::Verifying);
+}
+
+#[test]
+fn init_policy_can_be_changed_by_owner() {
+    let mut t = new_with_policies(Some(vec![ivp(ACME, 500, 800)]));
+    as_caller(OWNER, 1, NOW);
+    t.set_vendor_policy(acc(ACME), U128(1), U128(2));
+    assert_eq!(t.get_vendor_policy(acc(ACME)), Some(policy(1, 2)));
+    t.remove_vendor_policy(acc(ACME));
+    assert_eq!(t.get_vendor_policy(acc(ACME)), None);
+}
+
+#[test]
+#[should_panic(expected = "limits must be > 0")]
+fn init_policy_zero_max_rejected() {
+    new_with_policies(Some(vec![ivp(ACME, 0, 800)]));
+}
+
+#[test]
+#[should_panic(expected = "limits must be > 0")]
+fn init_policy_zero_cap_rejected() {
+    new_with_policies(Some(vec![ivp(ACME, 500, 0)]));
+}
+
+#[test]
+#[should_panic(expected = "duplicate initial vendor policy: acme.testnet")]
+fn init_policy_duplicate_rejected() {
+    new_with_policies(Some(vec![ivp(ACME, 1, 1), ivp("globex.testnet", 1, 1), ivp(ACME, 2, 2)]));
+}
+
+#[test]
+#[should_panic(expected = "too many initial vendor policies (max 50)")]
+fn init_policy_over_max_rejected() {
+    let list = (0..=MAX_INITIAL_VENDOR_POLICIES).map(|i| ivp(&format!("v{i}.testnet"), 1, 1)).collect();
+    new_with_policies(Some(list));
+}
+
+#[test]
+fn init_policy_exactly_max_accepted() {
+    let list = (0..MAX_INITIAL_VENDOR_POLICIES).map(|i| ivp(&format!("v{i}.testnet"), 1, 1)).collect();
+    let t = new_with_policies(Some(list));
+    assert_eq!(t.get_vendor_policy(acc("v49.testnet")), Some(policy(1, 1)));
+    assert_eq!(event_names().len(), MAX_INITIAL_VENDOR_POLICIES);
+}
+
+#[test]
+fn initial_vendor_policies_pure_validation() {
+    assert_eq!(validate_initial_vendor_policies(&[]), Ok(()));
+    assert_eq!(validate_initial_vendor_policies(&[ivp(ACME, 1, 1)]), Ok(()));
+    assert!(validate_initial_vendor_policies(&[ivp(ACME, 0, 1)]).is_err());
+    assert!(validate_initial_vendor_policies(&[ivp(ACME, 1, 1), ivp(ACME, 1, 1)]).is_err());
+    assert_eq!(validate_vendor_limits(1, 1), Ok(()));
+    assert_eq!(validate_vendor_limits(0, 1), Err("limits must be > 0".into()));
+}
+
+#[test]
+fn initial_vendor_policy_json_shape() {
+    let v: InitialVendorPolicy = near_sdk::serde_json::from_str(
+        r#"{"vendor":"acme.testnet","max_per_invoice":"500","monthly_cap":"800"}"#,
+    )
+    .unwrap();
+    assert_eq!(v, ivp(ACME, 500, 800));
 }
 
 #[test]

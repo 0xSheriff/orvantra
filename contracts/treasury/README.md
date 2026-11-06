@@ -28,11 +28,19 @@ payout = token.storage_deposit(destination, registration_only) ──► on_paym
 ## Methods
 
 ### Init
-`new(owner, agent, registry, token, auto_pay_threshold: U128, monthly_cap: U128, min_payout_age_sec: u64, storage_deposit?: U128)`
+`new(owner, agent, registry, token, auto_pay_threshold: U128, monthly_cap: U128, min_payout_age_sec: u64, storage_deposit?: U128, initial_vendor_policies?: [InitialVendorPolicy])`
 Amounts are strings in token base units (USDC: 6 decimals, so `"100000000"` = 100 USDC).
 `storage_deposit` (yoctoNEAR, optional, default `"1250000000000000000000"` = 0.00125 NEAR, max 0.1 NEAR) is attached to
 `token.storage_deposit` before every payout (see [Payout registration](#payout-registration-storage_deposit)).
-Callers of the Day 3 signature (without `storage_deposit`) still work.
+
+`initial_vendor_policies` (optional) lets the **deployer** approve vendors at init, so the owner (a human wallet) does
+not have to sign setup transactions. Each entry is a JSON object
+`{"vendor": "acme.testnet", "max_per_invoice": "500000000", "monthly_cap": "2000000000"}`.
+Validated like `set_vendor_policy` (both limits > 0), plus: at most 50 entries and no vendor twice (violations panic,
+so the contract is not initialized). Each entry emits the same `vendor_policy_set` event as `set_vendor_policy`.
+The owner can later change or remove these policies as usual.
+
+Callers of the Day 3 or Day 5 signature (without `storage_deposit` / `initial_vendor_policies`) still work.
 
 ### Agent
 `propose_payment(invoice_hash, vendor, amount, payout_version, deposit_address?, quote_hash?, memo?, agent_flags?) -> Promise`
@@ -46,7 +54,7 @@ Flags never override a contract rejection (e.g. not in registry). The raw flags 
 ### Owner
 | Method | Deposit | Notes |
 |---|---|---|
-| `set_vendor_policy(vendor, max_per_invoice, monthly_cap)` | 1 yocto | approves a vendor |
+| `set_vendor_policy(vendor, max_per_invoice, monthly_cap)` | 1 yocto | approves a vendor (or set at init, see above) |
 | `remove_vendor_policy(vendor)` | 1 yocto | vendor no longer payable by the agent |
 | `set_agent(agent)` | 1 yocto | rotate the agent account |
 | `set_limits(auto_pay_threshold, monthly_cap, min_payout_age_sec)` | 1 yocto | |
@@ -130,7 +138,7 @@ payment stays in the bucket it was proposed in, even if approved later.
 Payment events (data = id, invoice_hash, vendor, amount, status, destination, direct, quote_hash,
 reasons): `payment_proposed`, `payment_pending`, `payment_approved`, `payment_paid`,
 `payment_rejected`, `payment_failed`.
-Admin events: `vendor_policy_set`, `vendor_policy_removed`, `agent_changed`, `limits_changed`,
+Admin events: `vendor_policy_set` (also emitted at init for each `initial_vendor_policies` entry), `vendor_policy_removed`, `agent_changed`, `limits_changed`,
 `storage_deposit_changed`, `withdrawal`, `paused`, `unpaused`.
 
 ## Gas

@@ -60,6 +60,42 @@ pub struct VendorPolicy {
     pub monthly_cap: U128,
 }
 
+/// Maximum number of vendor policies that can be set in `new`.
+pub const MAX_INITIAL_VENDOR_POLICIES: usize = 50;
+
+/// One vendor policy set by the deployer at init (so the owner's wallet signs no setup transaction).
+#[near(serializers = [json])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct InitialVendorPolicy {
+    pub vendor: AccountId,
+    pub max_per_invoice: U128,
+    pub monthly_cap: U128,
+}
+
+/// Same limit rule as `set_vendor_policy` (both > 0).
+pub fn validate_vendor_limits(max_per_invoice: u128, monthly_cap: u128) -> Result<(), String> {
+    if max_per_invoice == 0 || monthly_cap == 0 {
+        return Err("limits must be > 0".into());
+    }
+    Ok(())
+}
+
+/// At most `MAX_INITIAL_VENDOR_POLICIES` entries, limits > 0, no vendor twice.
+pub fn validate_initial_vendor_policies(list: &[InitialVendorPolicy]) -> Result<(), String> {
+    if list.len() > MAX_INITIAL_VENDOR_POLICIES {
+        return Err(format!(
+            "too many initial vendor policies (max {MAX_INITIAL_VENDOR_POLICIES})"
+        ));
+    }
+    for (i, p) in list.iter().enumerate() {
+        validate_vendor_limits(p.max_per_invoice.0, p.monthly_cap.0)?;
+        if list[..i].iter().any(|q| q.vendor == p.vendor) {
+            return Err(format!("duplicate initial vendor policy: {}", p.vendor));
+        }
+    }
+    Ok(())
+}
+
 pub fn bucket_of(ts_ns: u64) -> u64 {
     ts_ns / BUCKET_NS
 }
