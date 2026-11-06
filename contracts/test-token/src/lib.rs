@@ -204,6 +204,47 @@ mod tests {
         assert_eq!(t.ft_balance_of(acc("owner.testnet")).0, SUPPLY - 5_000_000);
     }
 
+    /// NEAR refunded to the caller by the receipts the token created.
+    fn refunded() -> u128 {
+        near_sdk::test_utils::get_created_receipts()
+            .into_iter()
+            .flat_map(|r| r.actions)
+            .filter_map(|a| match a {
+                near_sdk::mock::MockAction::Transfer { deposit, .. } => Some(deposit.as_yoctonear()),
+                _ => None,
+            })
+            .sum()
+    }
+
+    /// What the treasury does before every payout: a third party (the treasury) registers a fresh
+    /// account with `registration_only: true`, attaching 0.00125 NEAR + extra.
+    #[test]
+    fn registration_only_by_third_party_refunds_excess_and_repeat() {
+        let mut t = setup();
+        let min = t.storage_balance_bounds().min.as_yoctonear();
+        assert_eq!(min, 1_250_000_000_000_000_000_000, "0.00125 NEAR, same as USDC");
+        let deposit = NearToken::from_yoctonear(min + 1_000);
+        let fresh = acc("a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90");
+
+        ctx("treasury.testnet", deposit);
+        let b = t.storage_deposit(Some(fresh.clone()), Some(true));
+        assert_eq!(b.total.as_yoctonear(), min);
+        assert_eq!(refunded(), 1_000, "excess refunded");
+        assert!(t.storage_balance_of(fresh.clone()).is_some());
+
+        ctx("treasury.testnet", deposit);
+        t.storage_deposit(Some(fresh.clone()), Some(true));
+        assert_eq!(refunded(), min + 1_000, "already registered: everything refunded");
+    }
+
+    #[test]
+    #[should_panic(expected = "less than the minimum storage balance")]
+    fn registration_below_minimum_panics() {
+        let mut t = setup();
+        ctx("treasury.testnet", NearToken::from_yoctonear(1));
+        t.storage_deposit(Some(acc("new.testnet")), Some(true));
+    }
+
     #[test]
     #[should_panic(expected = "is not registered")]
     fn transfer_to_unregistered_fails() {

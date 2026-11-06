@@ -23,8 +23,11 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
  │            └─ NEAR AI Cloud reader B: GLM-5.3-flash (TEE, E2EE) ─┴─► must agree on      │
  │               vendor account / invoice no. / total / currency / due date; both signed   │
  │ 3. Checks: vendor approved? payout from registry? duplicate hash? amount vs history?     │
- │ 4. Quote: 1Click API → verify quote signature → check quote.recipient == registry payout │
- │ 5. Call treasury.propose_payment(...) with a FUNCTION-CALL key (cannot withdraw)          │
+ │ 4. Quote: 1Click API → verify quote signature → strict check vs registry payout          │
+ │    (recipient, assets, amount, refundTo, ORIGIN_CHAIN types, deadline); testnet: dry     │
+ │    mainnet quote + SIMULATED deposit account (no NEAR Intents on testnet)                │
+ │ 5. Call treasury.propose_payment(..., agent_flags = hold reasons) with a FUNCTION-CALL   │
+ │    key: receiver = treasury, method = propose_payment only (cannot withdraw/approve)     │
  └──────────────────────────────────────────────────────────────────────────────────────────┘
         │                                         │
         ▼                                         ▼
@@ -33,10 +36,11 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
  │   token, address,        │          │ policy: approved vendors, per-invoice cap,        │
  │   updated_at}            │          │   monthly cap, auto-pay threshold                 │
  │ only vendor can set it   │          │ rejects duplicate invoice hashes                  │
- │ (gasless via relayer)    │          │ under threshold → pays (ft_transfer to 1Click     │
- └──────────────────────────┘          │   deposit addr, or direct to vendor on NEAR)      │
-                                       │ over threshold / new or changed payout → PENDING  │
-                                       │   → owner approves with own wallet key            │
+ │ (gasless via relayer)    │          │ under threshold → pays: storage_deposit(dest) then│
+ └──────────────────────────┘          │   ft_transfer to 1Click deposit addr, or direct   │
+                                       │   to vendor on NEAR                               │
+                                       │ over threshold / new or changed payout / agent    │
+                                       │   flags → PENDING → owner approves in own wallet  │
                                        └───────────────────────────────────────────────────┘
         │
         ▼
@@ -69,12 +73,32 @@ give independent readings without a second provider. Fortytwo may optionally be 
 fixture text and never sees real invoices. Models tested and rejected: `Qwen/Qwen3.8-27B` (garbled fields
 under a strict schema) and `moonshotai/kimi-k2.6` (misread a total).
 
+## Day 5: agent → 1Click → treasury (2026-11-06)
+- **Restricted agent key.** `agent/` generates its own ed25519 key outside the repo (`~/.orvantra/keys/…`, mode 600);
+  the owner adds it as a function-call key (receiver = treasury, `propose_payment` only, 0.25 NEAR allowance). The
+  agent refuses to sign if the on-chain permission is anything else. `npm run prove-key-limits` shows `set_limits`,
+  `withdraw`, token `ft_transfer` and a NEAR transfer are all refused by the network.
+- **Agent flags.** Day-4 hold reasons go on-chain as `agent_flags`; the contract then forces Pending with
+  `"agent: …"` reasons. The agent can make the contract stricter, never looser. All decisions stay on-chain.
+- **Payout registration.** A 1Click deposit address for USDC on NEAR is a fresh implicit account that is not
+  registered on USDC (verified on mainnet), so the treasury calls `token.storage_deposit(dest, registration_only)`
+  (0.00125 NEAR by default, owner-settable, excess refunded) before every `ft_transfer`, direct payouts included.
+- **1Click quotes.** Signature verified with the SDK (`verifyQuoteSignature`), then every routing field is
+  compared with the registry payout; `quote_hash` (base58 sha256 of the signed payload) is stored with the payment.
+  Mainnet: real quote, pay `quote.depositAddress`, then submit the tx hash and poll `/status`. Testnet: a dry mainnet
+  quote proves price + signature and tUSDC goes to `orvantra-1click-sim.testnet`, labelled **SIMULATED**.
+- **Gas.** propose/approve: 65 TGas static (registry 5 + decision callback 60, which passes on storage_deposit 10 +
+  registration callback 30 = ft_transfer 10 + transfer callback 10); attach 150 TGas.
+
 ## Honest limits (put in README)
 - Cross-chain: the 1Click deposit address can't be fully verified on-chain in v1. The agent verifies the
   quote signature and recipient off-chain; the contract caps the damage of a compromised agent to the
   auto-pay limit. Same-chain (USDC on NEAR) payouts go straight to the vendor account — fully on-chain.
 - No fiat off-ramp. Vendors receive stablecoins.
-- NEAR Intents is mainnet-only: contracts developed on testnet, final demo on mainnet with tiny amounts.
+- NEAR Intents is mainnet-only: contracts developed on testnet, final demo on mainnet with tiny amounts. On testnet
+  the cross-chain deposit is simulated (a plain testnet account); only the dry quote's price and signature are real.
+- The function-call key's 0.25 NEAR allowance is a spending limit on gas, not on payments; payments are limited by
+  the treasury policy.
 
 ## Stack
 - Contracts: Rust, near-sdk, near-workspaces tests.

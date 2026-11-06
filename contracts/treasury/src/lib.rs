@@ -10,8 +10,11 @@
 //! propose_payment ─► Verifying ──registry──► Rejected
 //!                                      ├──► Pending ──approve──► Verifying ──registry──► Executing / Rejected
 //!                                      │       └──reject──► Rejected
-//!                                      └──► Executing ──ft_transfer──► Paid / Failed
+//!                                      └──► Executing ──storage_deposit──► ft_transfer──► Paid / Failed
 //! ```
+//! Every payout first registers the destination on the token (`storage_deposit` with
+//! `registration_only: true`, paid from the treasury's NEAR balance; excess is refunded by the token),
+//! because a fresh 1Click deposit address is not registered on USDC and a bare ft_transfer would fail.
 //! Verifying, Pending, Executing and Paid count against monthly caps; Rejected/Failed release.
 //! All decision logic lives in `policy.rs` (pure, unit-tested).
 
@@ -34,17 +37,28 @@ pub const MAX_PAGE_LIMIT: u64 = 100;
 
 // Gas budget (static, explicit, ~2x margin over typical costs; verify on testnet receipts):
 // - registry.get_vendor is a single map read (~2-3 TGas).
+// - NEP-145 storage_deposit (registration_only) is one map write + maybe a refund transfer (~3-5 TGas).
 // - NEP-141 ft_transfer is ~3-5 TGas.
 // - on_payment_transferred updates one record + two counters (~3 TGas).
-// - on_*_checked runs the policy decision (~5 TGas) and may schedule ft_transfer + its callback,
-//   which it must pass on: GAS_FT_TRANSFER + GAS_ON_TRANSFERRED = 20 TGas. Budget 45 TGas.
-// propose_payment / approve_payment attach 5 + 45 = 50 TGas statically plus their own ~5-10 TGas,
-// so callers should attach >= 100 TGas. Unused gas is shared out by the runtime.
+// - on_payment_registered (~3 TGas own) schedules ft_transfer + on_payment_transferred, which it
+//   must pass on: 10 + 10 = 20 TGas. Budget 30 TGas.
+// - on_*_checked runs the policy decision (~5 TGas) and may schedule storage_deposit +
+//   on_payment_registered, which it must pass on: 10 + 30 = 40 TGas. Budget 60 TGas.
+// propose_payment / approve_payment attach 5 + 60 = 65 TGas statically plus their own ~5-10 TGas,
+// so callers must attach >= 100 TGas (150 recommended). Unused gas is shared out by the runtime.
 pub const GAS_GET_VENDOR: Gas = Gas::from_tgas(5);
+pub const GAS_STORAGE_DEPOSIT: Gas = Gas::from_tgas(10);
 pub const GAS_FT_TRANSFER: Gas = Gas::from_tgas(10);
 pub const GAS_ON_TRANSFERRED: Gas = Gas::from_tgas(10);
-pub const GAS_ON_CHECKED: Gas = Gas::from_tgas(45);
+pub const GAS_ON_REGISTERED: Gas = Gas::from_tgas(30);
+pub const GAS_ON_CHECKED: Gas = Gas::from_tgas(60);
 pub const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
+/// Default NEAR attached to `storage_deposit` before each payout: 0.00125 NEAR, the NEP-141
+/// minimum on USDC (125 bytes x 1e19 yocto/byte). Excess (or all of it, if the receiver is already
+/// registered) is refunded to the treasury by the token.
+pub const DEFAULT_STORAGE_DEPOSIT: u128 = 1_250_000_000_000_000_000_000;
+/// Upper bound for the owner-settable storage deposit (guards against a typo draining NEAR).
+pub const MAX_STORAGE_DEPOSIT: u128 = 100_000_000_000_000_000_000_000; // 0.1 NEAR
 
 #[ext_contract(ext_registry)]
 #[allow(dead_code)]
@@ -56,6 +70,7 @@ trait Registry {
 #[allow(dead_code)]
 trait FungibleToken {
     fn ft_transfer(&mut self, receiver_id: AccountId, amount: U128, memo: Option<String>);
+    fn storage_deposit(&mut self, account_id: Option<AccountId>, registration_only: Option<bool>);
 }
 
 #[near(serializers = [borsh, json])]
@@ -97,6 +112,8 @@ pub struct Payment {
     pub deposit_address: Option<String>,
     pub quote_hash: Option<String>,
     pub memo: Option<String>,
+    /// Hold reasons from the agent's own checks (as given; added to `reasons` as "agent: ...").
+    pub agent_flags: Vec<String>,
     pub status: PaymentStatus,
     pub reasons: Vec<String>,
     pub approved_by_owner: bool,
@@ -116,6 +133,8 @@ pub struct ConfigView {
     pub auto_pay_threshold: U128,
     pub monthly_cap: U128,
     pub min_payout_age_sec: u64,
+    /// yoctoNEAR attached to `storage_deposit` before each payout.
+    pub storage_deposit: U128,
     pub paused: bool,
     pub payment_count: u64,
 }
@@ -142,6 +161,7 @@ pub struct Treasury {
     auto_pay_threshold: u128,
     monthly_cap: u128,
     min_payout_age_sec: u64,
+    storage_deposit: u128,
     paused: bool,
     policies: IterableMap<AccountId, VendorPolicy>,
     payments: Vector<Payment>,
@@ -165,8 +185,12 @@ impl Treasury {
         auto_pay_threshold: U128,
         monthly_cap: U128,
         min_payout_age_sec: u64,
+        storage_deposit: Option<U128>,
     ) -> Self {
         require!(owner != agent, "agent must be a different account from owner");
+        let storage_deposit = storage_deposit.map(|d| d.0).unwrap_or(DEFAULT_STORAGE_DEPOSIT);
+        policy::validate_storage_deposit(storage_deposit, MAX_STORAGE_DEPOSIT)
+            .unwrap_or_else(|e| env::panic_str(&e));
         Self {
             owner,
             agent,
@@ -175,6 +199,7 @@ impl Treasury {
             auto_pay_threshold: auto_pay_threshold.0,
             monthly_cap: monthly_cap.0,
             min_payout_age_sec,
+            storage_deposit,
             paused: false,
             policies: IterableMap::new(StorageKey::Policies),
             payments: Vector::new(StorageKey::Payments),
@@ -190,7 +215,12 @@ impl Treasury {
 
     /// Agent only. Panics on any synchronous policy violation (nothing is stored then). Otherwise
     /// records the payment as Verifying, commits the amount to this month's caps, burns the
-    /// invoice hash, and asks the registry before deciding. Attach >= 100 TGas.
+    /// invoice hash, and asks the registry before deciding. Attach >= 100 TGas (150 recommended).
+    ///
+    /// `agent_flags`: the agent's own hold reasons (<= 8, each 1..=200 chars). Non-empty means the
+    /// payment never auto-executes: it goes Pending with reasons "agent: <flag>" and only the owner
+    /// can approve it. The agent never approves.
+    #[allow(clippy::too_many_arguments)]
     pub fn propose_payment(
         &mut self,
         invoice_hash: String,
@@ -200,6 +230,7 @@ impl Treasury {
         deposit_address: Option<String>,
         quote_hash: Option<String>,
         memo: Option<String>,
+        agent_flags: Option<Vec<String>>,
     ) -> Promise {
         require!(env::predecessor_account_id() == self.agent, "only the agent can propose payments");
         policy::validate_inputs(
@@ -209,6 +240,8 @@ impl Treasury {
             memo.as_deref(),
         )
         .unwrap_or_else(|e| env::panic_str(&e));
+        let agent_flags = agent_flags.unwrap_or_default();
+        policy::validate_agent_flags(&agent_flags).unwrap_or_else(|e| env::panic_str(&e));
 
         let now = env::block_timestamp();
         let bucket = policy::bucket_of(now);
@@ -236,6 +269,7 @@ impl Treasury {
             deposit_address,
             quote_hash,
             memo,
+            agent_flags,
             status: PaymentStatus::Verifying,
             reasons: vec![],
             approved_by_owner: false,
@@ -283,6 +317,7 @@ impl Treasury {
             min_payout_age_sec: self.min_payout_age_sec,
             now_ns: env::block_timestamp(),
             first_payment: !self.paid_vendors.contains(&p.vendor),
+            agent_flags: &p.agent_flags,
         });
         match decision {
             Decision::Reject(reason) => PromiseOrValue::Value(self.reject(id, &reason)),
@@ -410,16 +445,33 @@ impl Treasury {
         );
     }
 
+    /// yoctoNEAR attached to `storage_deposit` before each payout (default 0.00125 NEAR, max
+    /// 0.1 NEAR). Requires 1 yoctoNEAR (full-access key).
+    #[payable]
+    pub fn set_storage_deposit(&mut self, amount: U128) {
+        self.assert_owner_full_access();
+        policy::validate_storage_deposit(amount.0, MAX_STORAGE_DEPOSIT)
+            .unwrap_or_else(|e| env::panic_str(&e));
+        self.storage_deposit = amount.0;
+        emit("storage_deposit_changed", json!({ "storage_deposit": amount }));
+    }
+
     /// Owner moves tokens out of the treasury. Requires 1 yoctoNEAR (full-access key).
+    /// Registers `receiver` on the token first (refunded if already registered), then transfers.
+    /// Attach >= 50 TGas.
     #[payable]
     pub fn withdraw(&mut self, amount: U128, receiver: AccountId) -> Promise {
         self.assert_owner_full_access();
         require!(amount.0 > 0, "amount must be > 0");
         emit("withdrawal", json!({ "amount": amount, "receiver": receiver }));
-        ext_ft::ext(self.token.clone())
-            .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(GAS_FT_TRANSFER)
-            .ft_transfer(receiver, amount, Some("orvantra treasury withdrawal".into()))
+        // Plain `.then`: ft_transfer runs even if registration failed, and then only fails itself if
+        // the receiver really is unregistered (there is no payment record to update here).
+        self.register_on_token(&receiver).then(
+            ext_ft::ext(self.token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(GAS_FT_TRANSFER)
+                .ft_transfer(receiver, amount, Some("orvantra treasury withdrawal".into())),
+        )
     }
 
     /// Stop the agent from proposing. No deposit needed (safe direction).
@@ -451,6 +503,35 @@ impl Treasury {
         PromiseOrValue::Value(U128(refund))
     }
 
+    /// Result of the token's `storage_deposit` for payment `id`'s destination. On success, sends the
+    /// tokens. On failure (e.g. deposit below the token's minimum) the payment is Failed and its cap
+    /// released; the attached NEAR comes back to the treasury with the failed receipt's refund.
+    /// Never panics.
+    #[private]
+    pub fn on_payment_registered(&mut self, id: u64) -> PromiseOrValue<PaymentStatus> {
+        let p = self.payment(id);
+        if p.status != PaymentStatus::Executing {
+            return PromiseOrValue::Value(p.status);
+        }
+        if !is_promise_success() {
+            return PromiseOrValue::Value(self.fail(id, policy::REASON_STORAGE_DEPOSIT_FAILED));
+        }
+        let Some(destination) = p.destination.clone() else {
+            return PromiseOrValue::Value(self.fail(id, "no destination"));
+        };
+        PromiseOrValue::Promise(
+            ext_ft::ext(self.token.clone())
+                .with_attached_deposit(ONE_YOCTO)
+                .with_static_gas(GAS_FT_TRANSFER)
+                .ft_transfer(destination, p.amount, p.memo.clone())
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(GAS_ON_TRANSFERRED)
+                        .on_payment_transferred(id),
+                ),
+        )
+    }
+
     /// Result of the treasury's ft_transfer for payment `id`. Never panics.
     #[private]
     pub fn on_payment_transferred(&mut self, id: u64) -> PaymentStatus {
@@ -464,11 +545,7 @@ impl Treasury {
             emit("payment_paid", payment_json(&self.payment(id)));
             PaymentStatus::Paid
         } else {
-            self.release(&p.vendor, p.bucket, p.amount.0);
-            self.payment_mut(id).reasons.push("ft_transfer failed".into());
-            self.set_status(id, PaymentStatus::Failed);
-            emit("payment_failed", payment_json(&self.payment(id)));
-            PaymentStatus::Failed
+            self.fail(id, policy::REASON_FT_TRANSFER_FAILED)
         }
     }
 
@@ -503,6 +580,7 @@ impl Treasury {
             auto_pay_threshold: self.auto_pay_threshold.into(),
             monthly_cap: self.monthly_cap.into(),
             min_payout_age_sec: self.min_payout_age_sec,
+            storage_deposit: self.storage_deposit.into(),
             paused: self.paused,
             payment_count: self.payments.len() as u64,
         }
@@ -574,20 +652,37 @@ impl Treasury {
         PaymentStatus::Rejected
     }
 
-    /// ft_transfer(destination, amount, memo) with 1 yoctoNEAR, then `on_payment_transferred`.
+    /// Failed after the decision (registration or transfer): release the cap, record the reason.
+    fn fail(&mut self, id: u64, reason: &str) -> PaymentStatus {
+        let p = self.payment(id);
+        self.release(&p.vendor, p.bucket, p.amount.0);
+        self.payment_mut(id).reasons.push(reason.into());
+        self.set_status(id, PaymentStatus::Failed);
+        emit("payment_failed", payment_json(&self.payment(id)));
+        PaymentStatus::Failed
+    }
+
+    /// token.storage_deposit({account_id, registration_only: true}) with `self.storage_deposit`
+    /// yoctoNEAR from the treasury's balance. NEP-145 refunds the excess (or all of it, if the
+    /// account is already registered) to the predecessor, i.e. back to this treasury.
+    fn register_on_token(&self, account: &AccountId) -> Promise {
+        ext_ft::ext(self.token.clone())
+            .with_attached_deposit(NearToken::from_yoctonear(self.storage_deposit))
+            .with_static_gas(GAS_STORAGE_DEPOSIT)
+            .storage_deposit(Some(account.clone()), Some(true))
+    }
+
+    /// storage_deposit(destination) -> on_payment_registered -> ft_transfer(destination, amount,
+    /// memo) with 1 yoctoNEAR -> on_payment_transferred.
     fn execute(&mut self, id: u64) -> Promise {
         self.set_status(id, PaymentStatus::Executing);
         let p = self.payment(id);
         let destination = p.destination.clone().unwrap_or_else(|| env::panic_str("no destination"));
-        ext_ft::ext(self.token.clone())
-            .with_attached_deposit(ONE_YOCTO)
-            .with_static_gas(GAS_FT_TRANSFER)
-            .ft_transfer(destination, p.amount, p.memo.clone())
-            .then(
-                Self::ext(env::current_account_id())
-                    .with_static_gas(GAS_ON_TRANSFERRED)
-                    .on_payment_transferred(id),
-            )
+        self.register_on_token(&destination).then(
+            Self::ext(env::current_account_id())
+                .with_static_gas(GAS_ON_REGISTERED)
+                .on_payment_registered(id),
+        )
     }
 
     fn vendor_spent_in(&self, vendor: &AccountId, bucket: u64) -> u128 {

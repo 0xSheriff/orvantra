@@ -13,6 +13,10 @@ pub const MAX_DEPOSIT_ADDRESS_LEN: usize = 128;
 pub const MAX_QUOTE_HASH_LEN: usize = 128;
 pub const MAX_MEMO_LEN: usize = 256;
 pub const MAX_REASON_LEN: usize = 256;
+pub const MAX_AGENT_FLAGS: usize = 8;
+/// Characters (not bytes) per agent flag.
+pub const MAX_AGENT_FLAG_LEN: usize = 200;
+pub const AGENT_FLAG_PREFIX: &str = "agent: ";
 
 pub const REASON_NOT_IN_REGISTRY: &str = "not in registry";
 pub const REASON_VERSION_CHANGED: &str = "payout changed since agent checked";
@@ -23,6 +27,8 @@ pub const REASON_BAD_PAYOUT_ADDRESS: &str = "registry payout address is not a va
 pub const HOLD_OVER_THRESHOLD: &str = "amount above auto-pay threshold";
 pub const HOLD_FRESH_PAYOUT: &str = "payout changed recently";
 pub const HOLD_FIRST_PAYMENT: &str = "first payment to this vendor";
+pub const REASON_STORAGE_DEPOSIT_FAILED: &str = "storage_deposit failed";
+pub const REASON_FT_TRANSFER_FAILED: &str = "ft_transfer failed";
 
 /// Payout details, same shape as the vendor registry's `Payout`.
 #[near(serializers = [borsh, json])]
@@ -121,6 +127,35 @@ pub fn validate_inputs(
     check_len("memo", memo, MAX_MEMO_LEN)
 }
 
+/// Agent flags: at most `MAX_AGENT_FLAGS`, each non-blank and at most `MAX_AGENT_FLAG_LEN` chars.
+pub fn validate_agent_flags(flags: &[String]) -> Result<(), String> {
+    if flags.len() > MAX_AGENT_FLAGS {
+        return Err(format!("at most {MAX_AGENT_FLAGS} agent_flags"));
+    }
+    for f in flags {
+        if f.trim().is_empty() {
+            return Err("agent_flags must not contain empty strings".into());
+        }
+        if f.chars().count() > MAX_AGENT_FLAG_LEN {
+            return Err(format!("agent_flag longer than {MAX_AGENT_FLAG_LEN} chars"));
+        }
+    }
+    Ok(())
+}
+
+/// Hold reasons for the agent's flags: `"agent: <flag>"` each.
+pub fn agent_hold_reasons(flags: &[String]) -> Vec<String> {
+    flags.iter().map(|f| format!("{AGENT_FLAG_PREFIX}{f}")).collect()
+}
+
+/// Storage deposit must be > 0 (zero always fails registration) and <= `max`.
+pub fn validate_storage_deposit(amount: u128, max: u128) -> Result<(), String> {
+    if amount == 0 || amount > max {
+        return Err(format!("storage_deposit must be in 1..={max} yoctoNEAR"));
+    }
+    Ok(())
+}
+
 /// Registry entry must exist and still have the version the agent looked at.
 pub fn check_registry(
     entry: Option<&RegistryVendor>,
@@ -195,6 +230,8 @@ pub struct DecideInput<'a> {
     pub min_payout_age_sec: u64,
     pub now_ns: u64,
     pub first_payment: bool,
+    /// Agent hold reasons; non-empty forces Hold (never Execute).
+    pub agent_flags: &'a [String],
 }
 
 pub fn decide(i: &DecideInput) -> Decision {
@@ -207,7 +244,7 @@ pub fn decide(i: &DecideInput) -> Decision {
             Ok(d) => d,
             Err(e) => return Decision::Reject(e),
         };
-    let reasons = needs_human_reasons(
+    let mut reasons = needs_human_reasons(
         i.amount,
         i.auto_pay_threshold,
         entry.updated_at_ns.0,
@@ -215,6 +252,7 @@ pub fn decide(i: &DecideInput) -> Decision {
         i.min_payout_age_sec,
         i.first_payment,
     );
+    reasons.extend(agent_hold_reasons(i.agent_flags));
     let payout = entry.payout.clone();
     if reasons.is_empty() {
         Decision::Execute { payout, destination, direct }

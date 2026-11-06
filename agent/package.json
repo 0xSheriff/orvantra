@@ -12,11 +12,20 @@
     "eval": "tsx src/eval.ts",
     "fixtures": "tsx scripts/make-fixtures.ts",
     "chain-state": "tsx scripts/chain-state.ts",
+    "pay": "tsx src/pay.ts",
+    "setup-agent-key": "tsx scripts/setup-agent-key.ts",
+    "prove-key-limits": "tsx scripts/prove-key-limits.ts",
+    "quote": "tsx scripts/quote.ts",
+    "oneclick-status": "tsx scripts/oneclick-status.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@defuse-protocol/one-click-sdk-typescript": "^0.1.26",
     "@napi-rs/canvas": "^1.1.0",
+    "@near-js/crypto": "^2.5.1",
+    "@near-js/transactions": "^2.5.1",
+    "@near-js/utils": "^2.5.1",
     "@nearai/inference-sdk": "^0.2.1",
     "dotenv": "^18.0.9",
     "pdf-to-img": "^7.0.2"

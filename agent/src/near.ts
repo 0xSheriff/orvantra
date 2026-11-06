@@ -28,6 +28,8 @@ export interface TreasuryConfig {
   auto_pay_threshold: string;
   monthly_cap: string;
   min_payout_age_sec: number;
+  /** yoctoNEAR the treasury attaches to token.storage_deposit before each payout (Day 5 treasury; absent on v1). */
+  storage_deposit?: string;
   paused: boolean;
   payment_count: number;
 }
@@ -45,6 +47,13 @@ export interface Payment {
   direct: boolean;
   destination: string | null;
   created_at: string;
+  payout?: Payout | null;
+  deposit_address?: string | null;
+  quote_hash?: string | null;
+  memo?: string | null;
+  agent_flags?: string[];
+  approved_by_owner?: boolean;
+  updated_at?: string;
 }
 
 /** Retry/backoff knobs. Defaults: 5 attempts total, 250ms * 2^n + jitter (max 2s each), whole call bounded by 10s. */
@@ -126,20 +135,9 @@ function parseRetryAfter(h: string | null): number | null {
   return Number.isFinite(t) ? Math.max(0, t - Date.now()) : null;
 }
 
-/** One HTTP attempt against one endpoint. Throws TransientRpcError for retryable failures, Error otherwise. */
-async function viewOnce<T>(url: string, contract: string, method: string, args: object, timeoutMs: number, f: typeof fetch): Promise<T> {
-  const body = {
-    jsonrpc: '2.0',
-    id: 'orvantra',
-    method: 'query',
-    params: {
-      request_type: 'call_function',
-      finality: 'final',
-      account_id: contract,
-      method_name: method,
-      args_base64: Buffer.from(JSON.stringify(args)).toString('base64'),
-    },
-  };
+/** One HTTP attempt: JSON-RPC `method(params)` against one endpoint. Returns `result`. Throws TransientRpcError for retryable failures. */
+async function rpcOnce<T>(url: string, method: string, params: unknown, timeoutMs: number, f: typeof fetch): Promise<T> {
+  const body = { jsonrpc: '2.0', id: 'orvantra', method, params };
   const host = new URL(url).host;
   let res: Response;
   try {
@@ -156,7 +154,7 @@ async function viewOnce<T>(url: string, contract: string, method: string, args: 
     throw new TransientRpcError(`${host}: HTTP ${res.status}`, parseRetryAfter(res.headers.get('retry-after')));
   }
   if (!res.ok) throw new Error(`${host}: HTTP ${res.status}`);
-  let json: { error?: { name?: string; cause?: { name?: string } }; result?: { result?: number[]; error?: string } };
+  let json: { error?: { name?: string; cause?: { name?: string } }; result?: T };
   try {
     json = (await res.json()) as typeof json;
   } catch (err) {
@@ -167,18 +165,47 @@ async function viewOnce<T>(url: string, contract: string, method: string, args: 
     const transient = TRANSIENT_RPC_CAUSES.has(json.error.cause?.name ?? '') || json.error.name === 'INTERNAL_ERROR';
     throw transient ? new TransientRpcError(msg) : new Error(msg);
   }
-  if (json.result?.error) throw new Error(`NEAR view ${contract}.${method}: ${json.result.error}`);
-  if (!json.result?.result) throw new TransientRpcError(`${host}: empty result`);
-  return JSON.parse(Buffer.from(json.result.result).toString('utf8')) as T;
+  if (json.result === undefined) throw new TransientRpcError(`${host}: empty result`);
+  return json.result;
+}
+
+/** One `query call_function` attempt; JSON-decodes the view's return value. */
+async function viewOnce<T>(url: string, contract: string, method: string, args: object, timeoutMs: number, f: typeof fetch): Promise<T> {
+  const result = await rpcOnce<{ result?: number[]; error?: string }>(url, 'query', {
+    request_type: 'call_function',
+    finality: 'final',
+    account_id: contract,
+    method_name: method,
+    args_base64: Buffer.from(JSON.stringify(args)).toString('base64'),
+  }, timeoutMs, f);
+  if (result.error) throw new Error(`NEAR view ${contract}.${method}: ${result.error}`);
+  if (!result.result) throw new TransientRpcError(`${new URL(url).host}: empty result`);
+  return JSON.parse(Buffer.from(result.result).toString('utf8')) as T;
 }
 
 // Index (per endpoint list) of the endpoint that last answered, so a rate-limited one is not retried first every call.
 const preferred = new Map<string, number>();
 
 /** view() without the cache: failover across cfg.rpcUrls with exponential backoff + jitter. */
-async function viewWithRetry<T>(cfg: NearConfig, contract: string, method: string, args: object): Promise<T> {
+function viewWithRetry<T>(cfg: NearConfig, contract: string, method: string, args: object): Promise<T> {
+  return withRetry(cfg, method, cfg.retry, (url, timeout, f) => viewOnce<T>(url, contract, method, args, timeout, f));
+}
+
+/**
+ * Any JSON-RPC method (e.g. `block`, `send_tx`, `tx`, `query view_access_key`) with the same failover/backoff as
+ * view(). Never cached. Re-sending the same signed transaction to another endpoint is safe (same hash and nonce).
+ */
+export function rpc<T>(cfg: NearConfig, method: string, params: unknown, retry: Partial<RetryPolicy> = {}): Promise<T> {
+  return withRetry(cfg, method, { ...cfg.retry, ...retry }, (url, timeout, f) => rpcOnce<T>(url, method, params, timeout, f));
+}
+
+async function withRetry<T>(
+  cfg: NearConfig,
+  method: string,
+  p: RetryPolicy,
+  attemptFn: (url: string, timeoutMs: number, f: typeof fetch) => Promise<T>,
+): Promise<T> {
   const d: RpcDeps = { ...defaultDeps, ...cfg.deps };
-  const p = cfg.retry;
   const urls = cfg.rpcUrls;
   if (!urls.length) throw new Error('NEAR RPC: no endpoints configured');
   const listKey = urls.join(',');
@@ -189,7 +216,7 @@ async function viewWithRetry<T>(cfg: NearConfig, contract: string, method: strin
     const i = (start + attempt) % urls.length;
     const left = p.deadlineMs - (d.now() - t0);
     try {
-      const out = await viewOnce<T>(urls[i], contract, method, args, Math.max(1, Math.floor(Math.min(p.attemptTimeoutMs, left))), d.fetch);
+      const out = await attemptFn(urls[i], Math.max(1, Math.floor(Math.min(p.attemptTimeoutMs, left))), d.fetch);
       preferred.set(listKey, i);
       return out;
     } catch (err) {
@@ -245,6 +272,24 @@ export const getConfig = (cfg: NearConfig) => view<TreasuryConfig>(cfg, cfg.trea
 
 export const getMonthlySpent = (cfg: NearConfig, vendor: string | null) =>
   view<string>(cfg, cfg.treasuryId, 'monthly_spent', { vendor });
+
+export const getPayment = (cfg: NearConfig, id: number) =>
+  view<Payment | null>(cfg, cfg.treasuryId, 'get_payment', { id });
+
+/** Same view on any contract (e.g. the token's storage_balance_bounds). */
+export const viewOn = <T>(cfg: NearConfig, contract: string, method: string, args: object = {}) => view<T>(cfg, contract, method, args);
+
+export type AccessKeyPermission = 'FullAccess' | { FunctionCall: { allowance: string | null; receiver_id: string; method_names: string[] } };
+
+export interface AccessKeyView {
+  nonce: number;
+  permission: AccessKeyPermission;
+  block_hash: string;
+}
+
+/** On-chain access key (never cached: the nonce changes). */
+export const getAccessKey = (cfg: NearConfig, accountId: string, publicKey: string) =>
+  rpc<AccessKeyView>(cfg, 'query', { request_type: 'view_access_key', finality: 'final', account_id: accountId, public_key: publicKey });
 
 /** All payments (pages of 100). */
 export async function getPayments(cfg: NearConfig): Promise<Payment[]> {

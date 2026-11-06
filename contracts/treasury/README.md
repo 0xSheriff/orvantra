@@ -9,8 +9,11 @@ payment executes now, waits for the owner, or is rejected.
 agent ──propose_payment──► treasury ──get_vendor──► vendor-registry
                               │ policy + registry check (pure functions in src/policy.rs)
                               ├─► Rejected
-                              ├─► Pending ──owner approve_payment──► registry re-check ──► ft_transfer
-                              └─► ft_transfer(destination) ──► Paid / Failed
+                              ├─► Pending ──owner approve_payment──► registry re-check ──► payout
+                              └─► payout ──► Paid / Failed
+
+payout = token.storage_deposit(destination, registration_only) ──► on_payment_registered
+         ──► token.ft_transfer(destination) ──► on_payment_transferred
 ```
 
 ## Roles
@@ -25,12 +28,20 @@ agent ──propose_payment──► treasury ──get_vendor──► vendor-r
 ## Methods
 
 ### Init
-`new(owner, agent, registry, token, auto_pay_threshold: U128, monthly_cap: U128, min_payout_age_sec: u64)`
+`new(owner, agent, registry, token, auto_pay_threshold: U128, monthly_cap: U128, min_payout_age_sec: u64, storage_deposit?: U128)`
 Amounts are strings in token base units (USDC: 6 decimals, so `"100000000"` = 100 USDC).
+`storage_deposit` (yoctoNEAR, optional, default `"1250000000000000000000"` = 0.00125 NEAR, max 0.1 NEAR) is attached to
+`token.storage_deposit` before every payout (see [Payout registration](#payout-registration-storage_deposit)).
+Callers of the Day 3 signature (without `storage_deposit`) still work.
 
 ### Agent
-`propose_payment(invoice_hash, vendor, amount, payout_version, deposit_address?, quote_hash?, memo?) -> Promise`
-Attach **≥ 100 TGas**, no deposit. Returns (via the promise chain) the final `PaymentStatus`.
+`propose_payment(invoice_hash, vendor, amount, payout_version, deposit_address?, quote_hash?, memo?, agent_flags?) -> Promise`
+Attach **≥ 100 TGas** (150 recommended), no deposit. Returns (via the promise chain) the final `PaymentStatus`.
+
+`agent_flags: Option<Vec<String>>` — the agent's own hold reasons (≤ 8 items, each 1–200 **characters**, no blank
+strings; violations panic). Non-empty flags mean the payment can **never auto-execute**: it goes **Pending** with
+reasons `"agent: <flag>"` (added after any contract reasons) and only the owner can approve it in their own wallet.
+Flags never override a contract rejection (e.g. not in registry). The raw flags are stored in `Payment.agent_flags`.
 
 ### Owner
 | Method | Deposit | Notes |
@@ -39,8 +50,9 @@ Attach **≥ 100 TGas**, no deposit. Returns (via the promise chain) the final `
 | `remove_vendor_policy(vendor)` | 1 yocto | vendor no longer payable by the agent |
 | `set_agent(agent)` | 1 yocto | rotate the agent account |
 | `set_limits(auto_pay_threshold, monthly_cap, min_payout_age_sec)` | 1 yocto | |
-| `approve_payment(id)` | 1 yocto, ≥ 100 TGas | re-checks the registry, then pays |
-| `withdraw(amount, receiver)` | 1 yocto | ft_transfer out of the treasury |
+| `set_storage_deposit(amount)` | 1 yocto | yoctoNEAR attached to `storage_deposit` before payouts (1 ..= 0.1 NEAR) |
+| `approve_payment(id)` | 1 yocto, ≥ 100 TGas (150 rec.) | re-checks the registry, then pays |
+| `withdraw(amount, receiver)` | 1 yocto, ≥ 50 TGas | registers `receiver` on the token, then ft_transfer out |
 | `unpause()` | 1 yocto | |
 | `reject_payment(id, reason)` | none | Pending (or stuck Verifying) → Rejected |
 | `pause()` | none | agent can no longer propose |
@@ -83,11 +95,27 @@ this month's caps *before* the registry call, so concurrent proposals can't over
   - otherwise → pay `deposit_address` (the 1Click deposit address; required and must be a valid NEAR
     account id, else Rejected). The payout snapshot and `quote_hash` are stored with the payment.
 - **Pending** (needs the owner) if any of: `amount > auto_pay_threshold`; payout changed less than
-  `min_payout_age_sec` ago; no payment to this vendor has ever been Paid. All reasons are recorded.
+  `min_payout_age_sec` ago; no payment to this vendor has ever been Paid; the agent sent `agent_flags`.
+  All reasons are recorded (agent ones as `"agent: ..."`).
 - otherwise execute now.
 
-**Execute**: `ft_transfer(destination, amount, memo)` with 1 yoctoNEAR → `on_payment_transferred`:
-success → **Paid** (vendor becomes "known"); failure → **Failed** and the committed amount is released.
+**Execute** (status Executing):
+1. `token.storage_deposit({account_id: destination, registration_only: true})` attaching `storage_deposit`
+   yoctoNEAR from the treasury's NEAR balance → `on_payment_registered`:
+   failure → **Failed** (`"storage_deposit failed"`), committed amount released, nothing transferred.
+2. `token.ft_transfer(destination, amount, memo)` with 1 yoctoNEAR → `on_payment_transferred`:
+   success → **Paid** (vendor becomes "known"); failure → **Failed** (`"ft_transfer failed"`), amount released.
+
+### Payout registration (`storage_deposit`)
+A 1Click deposit address for USDC on NEAR is a fresh 64-hex implicit account that is **not registered on the USDC
+contract** (`storage_balance_of` = `null`, verified on mainnet), so a bare `ft_transfer` to it fails. The treasury
+therefore registers every destination first, direct vendor payouts included:
+- NEP-145 `registration_only: true` makes the token take exactly the minimum (0.00125 NEAR on USDC and tUSDC) and
+  **refund the excess** to the caller, i.e. the treasury. If the account is already registered, the **whole deposit
+  is refunded**. So a payout to a known account costs only gas; a fresh deposit address costs 0.00125 NEAR.
+- If the attached amount is below the token's minimum, `storage_deposit` panics, its deposit is refunded with the
+  failed receipt, and the payment is **Failed** (cap released). The owner can raise it with `set_storage_deposit`.
+- The treasury must keep some NEAR (it also pays storage for payment records). Watch its NEAR balance.
 
 **Approve**: Pending → Verifying → registry re-checked (version *and* payout must be unchanged) →
 execute, or Rejected("payout changed since agent checked").
@@ -103,7 +131,7 @@ Payment events (data = id, invoice_hash, vendor, amount, status, destination, di
 reasons): `payment_proposed`, `payment_pending`, `payment_approved`, `payment_paid`,
 `payment_rejected`, `payment_failed`.
 Admin events: `vendor_policy_set`, `vendor_policy_removed`, `agent_changed`, `limits_changed`,
-`withdrawal`, `paused`, `unpaused`.
+`storage_deposit_changed`, `withdrawal`, `paused`, `unpaused`.
 
 ## Gas
 All cross-contract calls use explicit static gas (constants in `src/lib.rs`):
@@ -111,18 +139,24 @@ All cross-contract calls use explicit static gas (constants in `src/lib.rs`):
 | Call | Static gas | Expected use |
 |---|---|---|
 | `registry.get_vendor` | 5 TGas | one map read, ~2-3 TGas |
+| `token.storage_deposit` (registration_only) | 10 TGas | one map write + maybe a refund transfer, ~3-5 TGas |
+| `on_payment_registered` | 30 TGas | ~3 TGas own + 20 TGas passed on (ft_transfer 10 + on_payment_transferred 10) |
 | `token.ft_transfer` | 10 TGas | NEP-141 transfer, ~3-5 TGas |
 | `on_payment_transferred` | 10 TGas | ~3 TGas |
-| `on_proposal_checked` / `on_approval_checked` | 45 TGas | ~5 TGas own + 20 TGas for the nested ft_transfer + callback |
+| `on_proposal_checked` / `on_approval_checked` | 60 TGas | ~5 TGas own + 40 TGas passed on (storage_deposit 10 + on_payment_registered 30) |
 
-`propose_payment`/`approve_payment` attach 5 + 45 = 50 TGas statically (the nested 20 TGas is inside
-the 45) plus their own ~5-10 TGas, so attach **100 TGas** for headroom (the e2e script uses 150).
-These are budgets with ~2x margin, not measured values; check real usage in the testnet receipts. Unused gas is shared out to the calls by the runtime.
+`propose_payment`/`approve_payment` attach 5 + 60 = **65 TGas** statically (everything nested is inside the 60)
+plus their own ~5-10 TGas, so attach **≥ 100 TGas; 150 recommended** (the agent and the scripts use 150).
+`withdraw` attaches 10 + 10 = 20 TGas statically: attach ≥ 50 TGas. A unit test (`gas_budget_is_consistent`)
+checks that each callback's budget covers what it passes on. These are budgets with ~2x margin, not measured
+values; check real usage in the testnet receipts. Unused gas is shared out to the calls by the runtime.
 
 ## Security model
 - **Agent can't steal**: it can only call `propose_payment`. It cannot withdraw, change policy, approve
-  or rotate itself. Its key should be a function-call key restricted to `propose_payment` on this
-  contract (Day 4).
+  or rotate itself. Its key is a function-call key restricted to `propose_payment` on this contract
+  (`agent/` `npm run setup-agent-key`; `npm run prove-key-limits` shows everything else is refused).
+- **The agent can only make things stricter**: `agent_flags` can force a payment to wait for the owner, never
+  make one execute.
 - **Invoices can't redirect money**: the destination comes from the vendor registry, which only the
   vendor's own account can edit. A "please pay our new address" email has no effect.
 - **Payout changes are slowed down**: a payout newer than `min_payout_age_sec`, a version mismatch, or
@@ -146,6 +180,8 @@ on-chain.
 ### Other limits
 - The treasury pays storage for payment records from its own NEAR balance. Records are bounded in
   size; only the agent can create them and each costs it a transaction.
+- Each executed payout to an unregistered account costs the treasury 0.00125 NEAR (token storage). Only payouts that
+  pass all policy checks execute, so this is bounded by the same caps as the tokens themselves.
 - `get_pending` returns at most 100 entries; `get_payments` pages through all.
 
 ## Build & test
@@ -155,4 +191,7 @@ cargo test -p treasury                                             # unit tests 
 ```
 The near-workspaces sandbox does not run on Intel macOS, so all decision logic is in pure functions
 (`src/policy.rs`) and callbacks are unit-tested directly with mocked promise results.
-End-to-end on testnet: `scripts/testnet-e2e.sh` (see the script header).
+Promise chains are unit-tested by inspecting the receipts the contract creates (`test_utils::get_created_receipts`):
+receiver, method, JSON args, attached deposit, static gas and the `.then` dependency of every call.
+End-to-end on testnet: `scripts/testnet-e2e.sh` (Day 3 flow) and `scripts/testnet-day5.sh` (Day 5: agent with a
+restricted key, 1Click quotes, fresh treasury `orvantra-treasury-v2.testnet`).
