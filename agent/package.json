@@ -1,0 +1,32 @@
+{
+  "name": "orvantra-agent",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Orvantra invoice-reading agent: dual NEAR AI Cloud readers, checks against on-chain registry and treasury policy",
+  "type": "module",
+  "engines": {
+    "node": ">=24.22.1"
+  },
+  "scripts": {
+    "analyze": "tsx src/cli.ts",
+    "eval": "tsx src/eval.ts",
+    "fixtures": "tsx scripts/make-fixtures.ts",
+    "chain-state": "tsx scripts/chain-state.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@napi-rs/canvas": "^1.1.0",
+    "@nearai/inference-sdk": "^0.2.1",
+    "dotenv": "^18.0.9",
+    "pdf-to-img": "^7.0.2"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/pdfkit": "^0.17.7",
+    "pdfkit": "^0.20.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}
