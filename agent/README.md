@@ -52,8 +52,10 @@ npm ci
 # repo-root .env must contain NEARAI_API_KEY=...   (never commit it)
 ```
 
-Optional environment variables: `NEAR_NETWORK` (default `testnet`), `NEAR_RPC_URL` (default
-`https://rpc.<network>.near.org`), `REGISTRY_ID` (default `orvantra-registry.testnet`), `TREASURY_ID`
+Optional environment variables: `NEAR_NETWORK` (default `testnet`), `NEAR_RPC_URLS` (comma-separated, tried
+with failover; default testnet `https://test.rpc.fastnear.com,https://rpc.testnet.near.org`, mainnet
+`https://free.rpc.fastnear.com,https://rpc.mainnet.near.org`; legacy single `NEAR_RPC_URL` also accepted),
+`NEAR_VIEW_CACHE_MS` (identical view calls within this window share one request, default `30000`, `0` disables), `REGISTRY_ID` (default `orvantra-registry.testnet`), `TREASURY_ID`
 (default `orvantra-treasury.testnet`), `READER_A_MODEL`, `READER_B_MODEL`, `NEARAI_E2EE=0`.
 
 ## Commands
