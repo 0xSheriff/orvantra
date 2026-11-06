@@ -20,3 +20,20 @@ Live check performed: register -> view -> other account cannot alter -> invalid 
 
 ## Mainnet
 Not deployed. Requires explicit owner approval.
+
+## Day 5 (2026-11-06) — treasury v2 + restricted agent key
+| Contract / role | Account | Notes |
+|---|---|---|
+| treasury v2 | `orvantra-treasury-v2.testnet` | agent_flags + storage_deposit before every payout |
+| 1Click stand-in | `orvantra-1click-sim.testnet` | SIMULATED deposit address (testnet has no NEAR Intents) |
+| agent key | `ed25519:4NZW8ukRXJimdYcuhV1pQAw4EBsAi1HdvDTHgiRxVrFP` on `orvantra-agent.testnet` | function-call only: `propose_payment` on treasury v2, 0.25 NEAR allowance |
+
+Verified run (`scripts/testnet-day5.sh` + manual checks):
+- #0 45 tUSDC Bob: first payment -> Pending -> owner approved -> Paid (direct)
+- #1 12.50 tUSDC Bob (`03-bob-small.png`): auto-paid, direct, no human step
+- #2 120 tUSDC Acme (`01-acme-normal.png`): Pending (threshold + first payment) -> owner approved -> Paid to sim deposit
+- #3 80 tUSDC Acme (`04-acme-changed-bank.png`): Pending with "agent: invoice asks to pay a different address" (still pending)
+- `05-acme-duplicate.png`: rejected by agent (invoice_hash already used), no transaction
+- prove-key-limits: 4/4 refused (set_limits, withdraw, token ft_transfer, NEAR transfer) with InvalidAccessKeyError
+- storage registration fix: `orvantra-acme.testnet` was NOT registered on tUSDC; owner withdraw 1 tUSDC to it succeeded
+  (treasury registered it first). tx 5ydQLZfHk6K1YPa3fmaV5Sa5q58UJ3pCFjj36nGoYy69
