@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Final · Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f6f3ec; --sheet:#fbf9f4; --white:#fffefb; --ink:#1b1a17; --ink-2:#4a4740; --muted:#8a857a;
+  --rule:#e2ddd1; --rule-2:#cfc8b8; --green:#1f4d3a; --amber:#8a5a12; --amber-soft:#f3e8d3; --red:#8c2f22; --red-soft:#f2dfd9;
+  --serif:'Newsreader',Georgia,serif; --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav{border-right:1px solid var(--rule);padding:28px 24px;display:flex;flex-direction:column;gap:28px;position:sticky;top:0;height:100vh}
+.brand{font-family:var(--serif);font-size:22px;letter-spacing:-.01em}
+.brand small{display:block;font-family:var(--sans);font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+.navlist a{display:flex;justify-content:space-between;padding:7px 0;color:var(--ink-2);text-decoration:none;border-bottom:1px solid transparent}
+.navlist a.on{color:var(--ink);font-weight:500;border-bottom-color:var(--ink)}
+.navlist a span{font-family:var(--mono);font-size:12px;color:var(--muted)} .navlist a.on span{color:var(--amber)}
+.treasury{margin-top:auto;border-top:1px solid var(--rule);padding-top:18px;font-size:12px;color:var(--muted)}
+.treasury b{display:block;font-family:var(--serif);font-weight:400;font-size:26px;color:var(--ink);letter-spacing:-.01em;margin:4px 0 2px}
+.treasury .acct{font-family:var(--mono);font-size:11px}
+main{padding:22px 40px 32px}
+.crumbs{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--rule-2);padding-bottom:14px}
+.crumbs .c{font-size:13px;color:var(--muted)} .crumbs .c b{color:var(--ink);font-weight:500}
+.pager{display:flex;gap:16px;font-size:13px;color:var(--ink-2)}
+.pager a{color:inherit;text-decoration:none;border-bottom:1px solid var(--rule-2)}
+.stage{display:grid;grid-template-columns:1fr 390px;gap:36px;margin-top:20px;align-items:start}
+.paperwrap{display:flex;justify-content:center;padding:18px 0}
+.paper{position:relative;width:540px;background:var(--white);padding:48px 54px 54px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 18px 40px -20px rgba(60,45,20,.25);font-size:13px}
+.paper h2{font-size:19px;letter-spacing:.05em;font-weight:600}
+.paper .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.paper .meta{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:24px 0;font-size:12.5px}
+.paper .meta span:nth-child(odd){color:var(--muted)}
+.paper table{width:100%;border-collapse:collapse}
+.paper td{padding:9px 0;border-bottom:1px solid #efece5}
+.paper td:last-child{text-align:right;font-family:var(--mono)}
+.paper .tot td{border-bottom:0;font-weight:600;padding-top:14px;font-size:15px}
+.paper .pay{margin-top:26px;padding:12px 14px;background:#faf8f3;border:1px dashed var(--rule-2);font-size:12.5px}
+.mark{outline:2px solid var(--red);outline-offset:3px;border-radius:1px;justify-self:start}
+.mark.ok{outline-color:var(--green)}
+.pin{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--sheet);font:600 11px var(--sans);display:grid;place-items:center;box-shadow:0 0 0 3px var(--paper)}
+.pin.r{background:var(--red)}
+.rail{display:flex;flex-direction:column;gap:0;border:1px solid var(--rule-2);background:var(--sheet)}
+.verdict{padding:22px 24px;border-bottom:1px solid var(--rule)}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:500}
+.verdict .lbl{color:var(--amber)}
+.verdict h1{font-family:var(--serif);font-weight:400;font-size:31px;line-height:1.12;letter-spacing:-.015em;margin:8px 0 10px}
+.verdict p{color:var(--ink-2)}
+.f{display:grid;grid-template-columns:22px 1fr;gap:12px;padding:13px 24px;border-bottom:1px solid var(--rule)}
+.f .pin{position:static;box-shadow:none}
+.f b{font-weight:500;display:block}
+.f span{color:var(--ink-2);font-size:13px}
+.mono{font-family:var(--mono);font-size:12px}
+.strike{text-decoration:line-through;color:var(--red)}
+.payto{background:var(--ink);color:var(--sheet);padding:20px 24px}
+.payto .lbl{color:#a9a396}
+.payto .amt{font-family:var(--serif);font-size:40px;line-height:1.1;margin:6px 0;letter-spacing:-.02em}
+.payto .route{font-size:13px;color:#d8d3c7}
+.btns{display:flex;gap:10px;margin-top:18px}
+.btn{flex:1;font-family:var(--sans);font-size:14px;font-weight:500;padding:12px;border:0;cursor:pointer}
+.btn.y{background:var(--sheet);color:var(--ink)} .btn.n{background:transparent;color:var(--sheet);border:1px solid #5b574e}
+.btn:focus-visible{outline:2px solid #c9b98f;outline-offset:2px}
+.foot{font-size:12px;color:var(--muted);padding:12px 2px 0}
+</style>
+</head>
+<body>
+<div class="app">
+  <nav>
+    <div class="brand">Orvantra<small>Accounts payable</small></div>
+    <div class="navlist">
+      <a class="on" href="#">Needs approval <span>2</span></a>
+      <a href="#">All invoices <span>6</span></a>
+      <a href="#">Vendors <span>2</span></a>
+      <a href="#">Rules &amp; limits</a>
+      <a href="#">Activity</a>
+    </div>
+    <div class="treasury">Treasury balance<b>312.50 USDC</b><span class="acct">orvantra-treasury.near</span><br>Spent this month 177.50 of 1,000</div>
+  </nav>
+  <main>
+    <div class="crumbs"><div class="c">Needs approval / <b>INV-2026-0150</b></div><div class="pager"><span>1 of 2</span><a href="#">Next: Acme · 120.00</a></div></div>
+    <div class="stage">
+      <div class="paperwrap">
+        <div class="paper">
+          <span class="pin" style="left:-11px;top:46px">1</span>
+          <h2>ACME DESIGN STUDIO</h2>
+          <div class="sub">acme.near · studio@acme.example</div>
+          <div class="meta">
+            <span>Invoice</span><span class="mark ok">INV-2026-0150</span>
+            <span>Issued</span><span>4 November 2026</span>
+            <span>Due</span><span>20 November 2026</span>
+            <span>Bill to</span><span>Orvantra Ltd</span>
+          </div>
+          <table>
+            <tr><td>Brand refresh — round 2</td><td>50.00</td></tr>
+            <tr><td>Icon set (24 icons)</td><td>30.00</td></tr>
+            <tr class="tot"><td>Total due</td><td><span class="mark ok">80.00 USDC</span></td></tr>
+          </table>
+          <span class="pin" style="right:-11px;top:322px">2</span>
+          <div class="pay"><span class="mark">Our payout address has changed. Please pay <b>0x9999…9999</b> on Base.</span></div>
+          <span class="pin r" style="left:-11px;top:389px">3</span>
+        </div>
+      </div>
+      <aside>
+        <div class="rail">
+          <div class="verdict"><div class="lbl">Held for you</div><h1>This invoice asks you to pay someone else.</h1><p>Everything else checks out. Orvantra will only pay the address Acme registered on-chain.</p></div>
+          <div class="f"><span class="pin">1</span><div><b>Known vendor</b><span>acme.near is registered and approved. Limit 300 per invoice.</span></div></div>
+          <div class="f"><span class="pin">2</span><div><b>Read twice, privately</b><span>Two models agree on 80.00 USDC and INV-2026-0150. Both signed inside NEAR AI's secure hardware.</span></div></div>
+          <div class="f" style="border-bottom:0"><span class="pin r">3</span><div><b>Different payout address</b><span>Invoice says <span class="mono strike">0x9999…9999</span>. Registered: <span class="mono">0x3333…3333</span> on Base.</span></div></div>
+          <div class="payto"><div class="lbl">If you approve</div><div class="amt">80.00 USDC</div>
+            <div class="route">to acme.near → <span class="mono">0x3333…3333</span> · USDC on Base · about 25 seconds</div>
+            <div class="btns"><button class="btn y">Approve</button><button class="btn n">Reject</button></div></div>
+        </div>
+        <div class="foot">Approval is signed in your NEAR wallet. The treasury checks Acme's registry entry again before money moves.</div>
+      </aside>
+    </div>
+  </main>
+</div>
+</body>
+</html>
