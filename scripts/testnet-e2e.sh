@@ -12,7 +12,7 @@ set -euo pipefail
 
 # ------------------------------------------------------------------ accounts (edit these)
 NETWORK=testnet
-OWNER=orvantra.testnet                 # the human; owns token supply + treasury
+OWNER=${OWNER:-orvantra-owner.testnet}  # the human (dev stand-in on testnet); owns token supply + treasury
 AGENT=orvantra-agent.testnet           # the AI agent's account (only it may propose_payment)
 TOKEN=orvantra-tusdc.testnet           # test-token contract (tUSDC, 6 decimals)
 TREASURY=orvantra-treasury.testnet     # treasury contract
