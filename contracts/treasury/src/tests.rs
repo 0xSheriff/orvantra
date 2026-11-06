@@ -102,6 +102,7 @@ fn setup() -> Treasury {
         U128(THRESHOLD),
         U128(TREASURY_CAP),
         MIN_AGE_SEC,
+        None,
     );
     as_caller(OWNER, 1, NOW);
     t.set_vendor_policy(acc(ACME), U128(500_000_000), U128(800_000_000));
@@ -110,7 +111,7 @@ fn setup() -> Treasury {
 
 fn propose(t: &mut Treasury, hash: &str, amount: u128) -> u64 {
     as_caller(AGENT, 0, NOW);
-    let _ = t.propose_payment(hash.into(), acc(ACME), U128(amount), 1, None, None, None);
+    let _ = t.propose_payment(hash.into(), acc(ACME), U128(amount), 1, None, None, None, None);
     t.get_config().payment_count - 1
 }
 
@@ -124,6 +125,7 @@ fn propose_with_deposit(t: &mut Treasury, hash: &str, amount: u128) -> u64 {
         Some(DEPOSIT.into()),
         Some("quote-abc".into()),
         Some("inv 42".into()),
+        None,
     );
     t.get_config().payment_count - 1
 }
@@ -351,6 +353,7 @@ fn decide_input<'a>(entry: Option<&'a RegistryVendor>, token: &'a AccountId) -> 
         min_payout_age_sec: MIN_AGE_SEC,
         now_ns: NOW,
         first_payment: false,
+        agent_flags: &[],
     }
 }
 
@@ -384,7 +387,7 @@ fn ft_refund_amount_by_token() {
 #[should_panic(expected = "agent must be a different account from owner")]
 fn init_rejects_agent_equal_owner() {
     as_caller(OWNER, 0, NOW);
-    Treasury::new(acc(OWNER), acc(OWNER), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0);
+    Treasury::new(acc(OWNER), acc(OWNER), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, None);
 }
 
 #[test]
@@ -392,7 +395,7 @@ fn init_rejects_agent_equal_owner() {
 fn non_agent_cannot_propose() {
     let mut t = setup();
     as_caller(OWNER, 0, NOW);
-    let _ = t.propose_payment("h".into(), acc(ACME), U128(1), 1, None, None, None);
+    let _ = t.propose_payment("h".into(), acc(ACME), U128(1), 1, None, None, None, None);
 }
 
 #[test]
@@ -514,7 +517,7 @@ fn rejected_invoice_hash_stays_used() {
 fn unknown_vendor_rejected() {
     let mut t = setup();
     as_caller(AGENT, 0, NOW);
-    let _ = t.propose_payment("h".into(), acc("bob.testnet"), U128(1), 1, None, None, None);
+    let _ = t.propose_payment("h".into(), acc("bob.testnet"), U128(1), 1, None, None, None, None);
 }
 
 #[test]
@@ -540,7 +543,7 @@ fn over_treasury_monthly_cap_rejected() {
     t.set_vendor_policy(acc("bob.testnet"), U128(TREASURY_CAP), U128(TREASURY_CAP));
     propose(&mut t, "a", 500_000_000); // acme
     as_caller(AGENT, 0, NOW);
-    let _ = t.propose_payment("b".into(), acc("bob.testnet"), U128(500_000_001), 1, None, None, None);
+    let _ = t.propose_payment("b".into(), acc("bob.testnet"), U128(500_000_001), 1, None, None, None, None);
 }
 
 #[test]
@@ -550,7 +553,7 @@ fn cap_resets_in_next_bucket() {
     propose(&mut t, "b", 300_000_000);
     as_caller(AGENT, 0, NOW + BUCKET_NS);
     assert_eq!(t.monthly_spent(Some(acc(ACME))).0, 0);
-    let _ = t.propose_payment("c".into(), acc(ACME), U128(500_000_000), 1, None, None, None);
+    let _ = t.propose_payment("c".into(), acc(ACME), U128(500_000_000), 1, None, None, None, None);
     assert_eq!(t.monthly_spent(Some(acc(ACME))).0, 500_000_000);
 }
 
@@ -846,4 +849,361 @@ fn config_and_policy_views() {
     assert_eq!(c.token, acc(TOKEN));
     assert!(!c.paused);
     assert_eq!(t.get_vendor_policy(acc(ACME)), Some(policy(500_000_000, 800_000_000)));
+}
+
+// ======================================================================= day 5: promise chains
+
+/// A cross-contract call created by the contract under test (from the mocked blockchain).
+#[derive(Debug)]
+struct Call {
+    receiver: String,
+    method: String,
+    args: Value,
+    deposit: u128,
+    gas_tgas: u64,
+    /// Indices of receipts this one waits for (`.then`).
+    after: Vec<u64>,
+}
+
+fn calls() -> Vec<Call> {
+    near_sdk::test_utils::get_created_receipts()
+        .into_iter()
+        .flat_map(|r| {
+            let receiver = r.receiver_id.to_string();
+            let after: Vec<u64> = r.receipt_indices.iter().map(|i| *i as u64).collect();
+            r.actions.into_iter().filter_map(move |a| match a {
+                near_sdk::mock::MockAction::FunctionCallWeight {
+                    method_name, args, attached_deposit, prepaid_gas, ..
+                } => Some(Call {
+                    receiver: receiver.clone(),
+                    method: String::from_utf8(method_name).unwrap(),
+                    args: near_sdk::serde_json::from_slice(&args).unwrap_or(Value::Null),
+                    deposit: attached_deposit.as_yoctonear(),
+                    gas_tgas: prepaid_gas.as_gas() / 1_000_000_000_000,
+                    after: after.clone(),
+                }),
+                _ => None,
+            })
+        })
+        .collect()
+}
+
+fn assert_register_chain(c: &[Call], dest: &str, id: u64, deposit: u128) {
+    assert_eq!(c.len(), 2, "{c:?}");
+    assert_eq!(c[0].receiver, TOKEN);
+    assert_eq!(c[0].method, "storage_deposit");
+    assert_eq!(c[0].args, json!({ "account_id": dest, "registration_only": true }));
+    assert_eq!(c[0].deposit, deposit);
+    assert_eq!(c[0].gas_tgas, 10);
+    assert_eq!(c[1].receiver, TREASURY);
+    assert_eq!(c[1].method, "on_payment_registered");
+    assert_eq!(c[1].args, json!({ "id": id }));
+    assert_eq!(c[1].deposit, 0);
+    assert_eq!(c[1].gas_tgas, 30);
+    assert_eq!(c[1].after, vec![0], "callback waits for storage_deposit");
+}
+
+fn registered_result(t: &mut Treasury, id: u64, ok: bool) -> PromiseOrValue<PaymentStatus> {
+    let r = if ok {
+        PromiseResult::Successful(br#"{"total":"1250000000000000000000","available":"0"}"#.to_vec())
+    } else {
+        PromiseResult::Failed
+    };
+    as_callback(NOW, r);
+    t.on_payment_registered(id)
+}
+
+#[test]
+fn execute_direct_registers_vendor_before_transfer() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose(&mut t, "inv-2", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), None);
+    assert_eq!(t.get_payment(id).unwrap().status, PaymentStatus::Executing);
+    assert_register_chain(&calls(), "acme-payouts.testnet", id, DEFAULT_STORAGE_DEPOSIT);
+}
+
+#[test]
+fn execute_cross_chain_registers_deposit_address() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose_with_deposit(&mut t, "inv-2", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(base_vendor(1, DAY_NS))), None);
+    assert_register_chain(&calls(), DEPOSIT, id, DEFAULT_STORAGE_DEPOSIT);
+}
+
+#[test]
+fn approve_path_also_registers_first() {
+    let mut t = setup();
+    let id = propose(&mut t, "inv", 50);
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    as_caller(OWNER, 1, NOW);
+    let _ = t.approve_payment(id);
+    as_callback(NOW, PromiseResult::Successful(vec![]));
+    assert_eq!(status_of(t.on_approval_checked(id, Ok(Some(old_near_vendor())))), None);
+    assert_register_chain(&calls(), "acme-payouts.testnet", id, DEFAULT_STORAGE_DEPOSIT);
+}
+
+#[test]
+fn registered_ok_schedules_ft_transfer_then_callback() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose_with_deposit(&mut t, "inv-2", 50);
+    registry_answers(&mut t, id, Some(base_vendor(1, DAY_NS)));
+    assert!(matches!(registered_result(&mut t, id, true), PromiseOrValue::Promise(_)));
+    let c = calls();
+    assert_eq!(c.len(), 2, "{c:?}");
+    assert_eq!((c[0].receiver.as_str(), c[0].method.as_str()), (TOKEN, "ft_transfer"));
+    assert_eq!(c[0].args, json!({ "receiver_id": DEPOSIT, "amount": "50", "memo": "inv 42" }));
+    assert_eq!((c[0].deposit, c[0].gas_tgas), (1, 10));
+    assert_eq!((c[1].receiver.as_str(), c[1].method.as_str()), (TREASURY, "on_payment_transferred"));
+    assert_eq!(c[1].args, json!({ "id": id }));
+    assert_eq!((c[1].gas_tgas, c[1].after.clone()), (10, vec![0]));
+    assert_eq!(t.get_payment(id).unwrap().status, PaymentStatus::Executing);
+}
+
+#[test]
+fn registration_failure_fails_payment_and_releases_cap() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let before = t.monthly_spent(None).0;
+    let id = propose(&mut t, "inv-2", 50);
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    assert_eq!(t.monthly_spent(None).0, before + 50);
+    assert_eq!(status_of(registered_result(&mut t, id, false)), Some(PaymentStatus::Failed));
+    let p = t.get_payment(id).unwrap();
+    assert_eq!(p.reasons, vec![REASON_STORAGE_DEPOSIT_FAILED]);
+    assert_eq!(t.monthly_spent(None).0, before);
+    assert!(calls().is_empty(), "no ft_transfer after failed registration");
+    assert_eq!(event_names(), vec!["payment_failed"]);
+}
+
+#[test]
+fn registered_callback_ignores_non_executing() {
+    let mut t = setup();
+    let id = propose(&mut t, "inv", 50);
+    assert_eq!(status_of(registered_result(&mut t, id, true)), Some(PaymentStatus::Verifying));
+    assert!(calls().is_empty());
+}
+
+#[test]
+fn full_chain_propose_register_transfer_paid() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose(&mut t, "inv-2", 50);
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    let _ = registered_result(&mut t, id, true);
+    assert_eq!(transfer_result(&mut t, true), PaymentStatus::Paid);
+    let p = t.get_payment(id).unwrap();
+    assert_eq!(p.status, PaymentStatus::Paid);
+    assert!(p.reasons.is_empty());
+}
+
+#[test]
+fn transfer_failure_reason_after_registration() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose(&mut t, "inv-2", 50);
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    let _ = registered_result(&mut t, id, true);
+    assert_eq!(transfer_result(&mut t, false), PaymentStatus::Failed);
+    assert_eq!(t.get_payment(id).unwrap().reasons, vec![REASON_FT_TRANSFER_FAILED]);
+}
+
+#[test]
+fn withdraw_registers_receiver_then_transfers() {
+    let mut t = setup();
+    as_caller(OWNER, 1, NOW);
+    drop(t.withdraw(U128(10), acc(OWNER)));
+    let c = calls();
+    assert_eq!(c.len(), 2, "{c:?}");
+    assert_eq!(c[0].method, "storage_deposit");
+    assert_eq!(c[0].args["account_id"], OWNER);
+    assert_eq!(c[0].deposit, DEFAULT_STORAGE_DEPOSIT);
+    assert_eq!(c[1].method, "ft_transfer");
+    assert_eq!(c[1].args["receiver_id"], OWNER);
+    assert_eq!(c[1].args["amount"], "10");
+    assert_eq!((c[1].deposit, c[1].after.clone()), (1, vec![0]));
+}
+
+#[test]
+fn gas_budget_is_consistent() {
+    let tg = |g: Gas| g.as_tgas();
+    // Each callback must pass on the static gas of what it schedules, plus its own work.
+    assert!(tg(GAS_ON_REGISTERED) >= tg(GAS_FT_TRANSFER) + tg(GAS_ON_TRANSFERRED) + 5);
+    assert!(tg(GAS_ON_CHECKED) >= tg(GAS_STORAGE_DEPOSIT) + tg(GAS_ON_REGISTERED) + 5);
+    // propose/approve: 65 TGas static + own work fits in the documented 100 TGas minimum.
+    assert_eq!(tg(GAS_GET_VENDOR) + tg(GAS_ON_CHECKED), 65);
+    assert!(tg(GAS_GET_VENDOR) + tg(GAS_ON_CHECKED) + 20 <= 100);
+}
+
+// ======================================================================= day 5: storage deposit config
+
+#[test]
+fn storage_deposit_default_and_custom() {
+    let t = setup();
+    assert_eq!(t.get_config().storage_deposit.0, DEFAULT_STORAGE_DEPOSIT);
+    assert_eq!(DEFAULT_STORAGE_DEPOSIT, 1_250_000_000_000_000_000_000, "0.00125 NEAR");
+    as_caller(OWNER, 0, NOW);
+    let t2 = Treasury::new(
+        acc(OWNER),
+        acc(AGENT),
+        acc(REGISTRY),
+        acc(TOKEN),
+        U128(1),
+        U128(1),
+        0,
+        Some(U128(42)),
+    );
+    assert_eq!(t2.get_config().storage_deposit.0, 42);
+}
+
+#[test]
+#[should_panic(expected = "storage_deposit must be in")]
+fn storage_deposit_zero_rejected_at_init() {
+    as_caller(OWNER, 0, NOW);
+    Treasury::new(acc(OWNER), acc(AGENT), acc(REGISTRY), acc(TOKEN), U128(1), U128(1), 0, Some(U128(0)));
+}
+
+#[test]
+fn owner_sets_storage_deposit_and_chain_uses_it() {
+    let mut t = setup();
+    as_caller(OWNER, 1, NOW);
+    t.set_storage_deposit(U128(2_000_000_000_000_000_000_000));
+    assert_eq!(t.get_config().storage_deposit.0, 2_000_000_000_000_000_000_000);
+    assert!(event_names().contains(&"storage_deposit_changed".to_string()));
+    pay_once(&mut t);
+    let id = propose(&mut t, "inv-2", 50);
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    assert_register_chain(&calls(), "acme-payouts.testnet", id, 2_000_000_000_000_000_000_000);
+}
+
+#[test]
+#[should_panic(expected = "storage_deposit must be in")]
+fn storage_deposit_above_max_rejected() {
+    let mut t = setup();
+    as_caller(OWNER, 1, NOW);
+    t.set_storage_deposit(U128(MAX_STORAGE_DEPOSIT + 1));
+}
+
+#[test]
+#[should_panic(expected = "only the owner can do this")]
+fn agent_cannot_set_storage_deposit() {
+    let mut t = setup();
+    as_caller(AGENT, 1, NOW);
+    t.set_storage_deposit(U128(1));
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn set_storage_deposit_requires_one_yocto() {
+    let mut t = setup();
+    as_caller(OWNER, 0, NOW);
+    t.set_storage_deposit(U128(1));
+}
+
+// ======================================================================= day 5: agent flags
+
+fn propose_flagged(t: &mut Treasury, hash: &str, amount: u128, flags: Option<Vec<String>>) -> u64 {
+    as_caller(AGENT, 0, NOW);
+    let _ = t.propose_payment(hash.into(), acc(ACME), U128(amount), 1, None, None, None, flags);
+    t.get_config().payment_count - 1
+}
+
+fn flags(v: &[&str]) -> Option<Vec<String>> {
+    Some(v.iter().map(|s| s.to_string()).collect())
+}
+
+#[test]
+fn agent_flags_force_pending_for_known_small_payment() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose_flagged(&mut t, "inv-2", 50, flags(&["invoice names a different address"]));
+    assert_eq!(t.get_payment(id).unwrap().agent_flags, vec!["invoice names a different address"]);
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), Some(PaymentStatus::Pending));
+    let p = t.get_payment(id).unwrap();
+    assert_eq!(p.reasons, vec!["agent: invoice names a different address"]);
+    assert!(calls().is_empty(), "nothing executes");
+    assert_eq!(t.get_pending().len(), 1);
+}
+
+#[test]
+fn agent_flags_add_to_contract_reasons() {
+    let mut t = setup();
+    let id = propose_flagged(&mut t, "inv", 50, flags(&["a", "b"]));
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), Some(PaymentStatus::Pending));
+    assert_eq!(t.get_payment(id).unwrap().reasons, vec![HOLD_FIRST_PAYMENT, "agent: a", "agent: b"]);
+}
+
+#[test]
+fn empty_agent_flags_do_not_hold() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose_flagged(&mut t, "inv-2", 50, Some(vec![]));
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), None, "executes");
+}
+
+#[test]
+fn agent_flags_do_not_override_registry_reject() {
+    let mut t = setup();
+    let id = propose_flagged(&mut t, "inv", 50, flags(&["x"]));
+    assert_eq!(registry_answers(&mut t, id, None), Some(PaymentStatus::Rejected));
+    assert_eq!(t.get_payment(id).unwrap().reasons, vec![REASON_NOT_IN_REGISTRY]);
+}
+
+#[test]
+fn owner_can_approve_flagged_payment() {
+    let mut t = setup();
+    pay_once(&mut t);
+    let id = propose_flagged(&mut t, "inv-2", 50, flags(&["x"]));
+    registry_answers(&mut t, id, Some(old_near_vendor()));
+    as_caller(OWNER, 1, NOW);
+    let _ = t.approve_payment(id);
+    as_callback(NOW, PromiseResult::Successful(vec![]));
+    assert_eq!(status_of(t.on_approval_checked(id, Ok(Some(old_near_vendor())))), None);
+    let _ = registered_result(&mut t, id, true);
+    assert_eq!(transfer_result(&mut t, true), PaymentStatus::Paid);
+}
+
+#[test]
+#[should_panic(expected = "at most 8 agent_flags")]
+fn too_many_agent_flags_rejected() {
+    let mut t = setup();
+    propose_flagged(&mut t, "inv", 1, Some(vec!["x".to_string(); 9]));
+}
+
+#[test]
+#[should_panic(expected = "agent_flag longer than 200 chars")]
+fn long_agent_flag_rejected() {
+    let mut t = setup();
+    propose_flagged(&mut t, "inv", 1, Some(vec!["x".repeat(201)]));
+}
+
+#[test]
+#[should_panic(expected = "agent_flags must not contain empty strings")]
+fn blank_agent_flag_rejected() {
+    let mut t = setup();
+    propose_flagged(&mut t, "inv", 1, flags(&["ok", "  "]));
+}
+
+#[test]
+fn agent_flag_limits_pure() {
+    assert!(validate_agent_flags(&[]).is_ok());
+    assert!(validate_agent_flags(&vec!["x".to_string(); 8]).is_ok());
+    assert!(validate_agent_flags(&["x".repeat(200)]).is_ok());
+    // The limit counts characters: 200 multi-byte chars are fine.
+    assert!(validate_agent_flags(&["é".repeat(200)]).is_ok());
+    assert!(validate_agent_flags(&["é".repeat(201)]).is_err());
+    assert_eq!(agent_hold_reasons(&["a".into()]), vec!["agent: a"]);
+}
+
+#[test]
+fn decide_with_agent_flags_holds() {
+    let token = acc(TOKEN);
+    let old = old_near_vendor();
+    let f = vec!["models disagree".to_string()];
+    let d = decide(&DecideInput { agent_flags: &f, ..decide_input(Some(&old), &token) });
+    assert!(
+        matches!(d, Decision::Hold { ref reasons, .. } if reasons == &vec!["agent: models disagree".to_string()])
+    );
 }

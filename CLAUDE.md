@@ -8,6 +8,7 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
 - `contracts/treasury/` — Rust NEAR contract: holds USDC, enforces payment policy (Day 3). Decision logic in `src/policy.rs` (pure).
 - `contracts/test-token/` — NEP-141 "Test USDC" (tUSDC, 6 decimals) for testnet demos only.
 - `scripts/testnet-e2e.sh` — testnet walkthrough of token + treasury + registry (run manually).
+- `scripts/testnet-day5.sh` — Day 5 testnet walkthrough: treasury v2, restricted agent key, `npm run pay` (run manually).
 - `agent/` — TypeScript service (Node 24): invoice extraction by two NEAR AI Cloud readers, checks, 1Click payments (Day 4-5).
   Invoice content goes ONLY to NEAR AI Cloud — never to Fortytwo or any other service.
 - `web/` — Next.js UI (Day 6).
