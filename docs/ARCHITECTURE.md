@@ -19,8 +19,9 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
         ▼
  ┌──────────────────────────── Agent service (TypeScript / Node) ───────────────────────────┐
  │ 1. Intake: web upload + Telegram bot (+ email forward if time)                           │
- │ 2. Extract  ── NEAR AI Cloud (TEE, private)  ──┐                                         │
- │            └─ Fortytwo (Qwen3.8-27B)        ──┴─► must agree on vendor/amount/due/ref    │
+ │ 2. Extract  ── NEAR AI Cloud reader A: Qwen3-VL-30B (TEE, E2EE) ──┐                     │
+ │            └─ NEAR AI Cloud reader B: GLM-5.3-flash (TEE, E2EE) ─┴─► must agree on      │
+ │               vendor account / invoice no. / total / currency / due date; both signed   │
  │ 3. Checks: vendor approved? payout from registry? duplicate hash? amount vs history?     │
  │ 4. Quote: 1Click API → verify quote signature → check quote.recipient == registry payout │
  │ 5. Call treasury.propose_payment(...) with a FUNCTION-CALL key (cannot withdraw)          │
@@ -48,7 +49,9 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
 - **Function-call access keys** — agent key limited to `propose_payment`; no transfer/withdraw/admin.
 - **Meta transactions + relayer** — vendors register/update payout without holding NEAR; relayer only pays for calls to our registry.
 - **NEAR Intents / 1Click API** — cross-chain stablecoin payout in the vendor's chosen token/chain; quote signature verified.
-- **NEAR AI Cloud (TEE)** — private invoice extraction; attestation shown per invoice (confirm API on day 1).
+- **NEAR AI Cloud (TEE)** — private invoice extraction by two independent models (Qwen3-VL and GLM-5.3-flash),
+  E2EE to the attested model key, response signature (`provider_tee`) verified per reading via
+  `@nearai/inference-sdk`. Unverified reading → hold.
 - **Stretch:** Trezu / Sputnik DAO multisig for large approvals; confidential swaps; on-chain quote-signature check.
 
 ## Fraud scenarios the demo must show
@@ -56,7 +59,15 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
 2. **Vendor payout recently changed** — payment forced to PENDING, owner alerted.
 3. **Duplicate invoice** — same invoice hash rejected by the contract.
 4. **Over limit** — agent tries > cap; contract rejects (shown on explorer).
-5. **Models disagree** — NEAR AI and Fortytwo read different amounts → held for human.
+5. **Models disagree** — the two NEAR AI readers read different amounts → held for human (real example while
+   choosing models: `moonshotai/kimi-k2.6` read a 1,200.00 total as 200).
+
+## Design decision: both readers on NEAR AI Cloud (2026-11-06, with the owner)
+Invoice content (images, text, extracted fields) is sent **only to NEAR AI Cloud** (TEE, attested, E2EE, signed
+responses). It is never sent to Fortytwo or any other non-NEAR service. Two models from different families
+give independent readings without a second provider. Fortytwo may optionally be used to generate synthetic
+fixture text and never sees real invoices. Models tested and rejected: `Qwen/Qwen3.8-27B` (garbled fields
+under a strict schema) and `moonshotai/kimi-k2.6` (misread a total).
 
 ## Honest limits (put in README)
 - Cross-chain: the 1Click deposit address can't be fully verified on-chain in v1. The agent verifies the
@@ -68,7 +79,7 @@ invoices (accounts payable) and stopping invoice fraud. Different side, little o
 ## Stack
 - Contracts: Rust, near-sdk, near-workspaces tests.
 - Agent + API: TypeScript (Node), `@defuse-protocol/one-click-sdk-typescript` (>=0.1.24 for signature check),
-  near-api-js, OpenAI-compatible clients for NEAR AI Cloud and Fortytwo.
+  near-api-js, `@nearai/inference-sdk` (Node >= 24.22.1) for NEAR AI Cloud (attestation, E2EE, signature checks).
 - UI: Next.js + NEAR Wallet Selector (owner approvals are signed by the owner's wallet, never by the bot).
 - Notifications: Telegram bot (notify + link to approve).
-- Secrets in `.env` only: `NEARAI_API_KEY`, `FORTYTWO_API_KEY`, `ONECLICK_JWT` (optional), agent key.
+- Secrets in `.env` only: `NEARAI_API_KEY`, `FORTYTWO_API_KEY` (fixture text only, optional), `ONECLICK_JWT` (optional), agent key.

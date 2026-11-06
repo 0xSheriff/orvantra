@@ -8,7 +8,8 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
 - `contracts/treasury/` — Rust NEAR contract: holds USDC, enforces payment policy (Day 3). Decision logic in `src/policy.rs` (pure).
 - `contracts/test-token/` — NEP-141 "Test USDC" (tUSDC, 6 decimals) for testnet demos only.
 - `scripts/testnet-e2e.sh` — testnet walkthrough of token + treasury + registry (run manually).
-- `agent/` — TypeScript service: invoice extraction (NEAR AI Cloud + Fortytwo), checks, 1Click payments (Day 4-5).
+- `agent/` — TypeScript service (Node 24): invoice extraction by two NEAR AI Cloud readers, checks, 1Click payments (Day 4-5).
+  Invoice content goes ONLY to NEAR AI Cloud — never to Fortytwo or any other service.
 - `web/` — Next.js UI (Day 6).
 
 ## Toolchain (installed)
@@ -28,4 +29,6 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
 - USDC on NEAR asset id: `nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`
 - USDC on Base asset id: `nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near`
 - NEAR AI Cloud: `https://cloud-api.near.ai/v1`, model `Qwen/Qwen3-VL-30B-A3B-Instruct` (TEE, verifiable, vision).
+  Reader B `z-ai/glm-5.3-flash`. Via `@nearai/inference-sdk` with `e2ee: true`, image_url content works for both and
+  `verifyResponse` returns `signatureKind: provider_tee` (verified 2026-11-06).
 - Fortytwo: `https://api.fortytwo.network/v1`, model `qwen/qwen3.8-27b` (reasoning model: give max_tokens >= 2000).
