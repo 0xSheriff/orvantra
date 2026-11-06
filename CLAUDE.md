@@ -5,7 +5,9 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
 
 ## Layout (target)
 - `contracts/vendor-registry/` — Rust NEAR contract: vendors set their own payout details.
-- `contracts/treasury/` — Rust NEAR contract: holds USDC, enforces payment policy (Day 3).
+- `contracts/treasury/` — Rust NEAR contract: holds USDC, enforces payment policy (Day 3). Decision logic in `src/policy.rs` (pure).
+- `contracts/test-token/` — NEP-141 "Test USDC" (tUSDC, 6 decimals) for testnet demos only.
+- `scripts/testnet-e2e.sh` — testnet walkthrough of token + treasury + registry (run manually).
 - `agent/` — TypeScript service: invoice extraction (NEAR AI Cloud + Fortytwo), checks, 1Click payments (Day 4-5).
 - `web/` — Next.js UI (Day 6).
 

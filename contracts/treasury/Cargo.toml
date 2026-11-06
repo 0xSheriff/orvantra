@@ -1,0 +1,15 @@
+[package]
+name = "treasury"
+description = "Orvantra treasury: holds USDC and enforces the business's payment policy for the AI agent"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+
+[dev-dependencies]
+near-sdk = { workspace = true, features = ["unit-testing"] }
