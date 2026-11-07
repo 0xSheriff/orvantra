@@ -9,6 +9,7 @@ Two public pages sit outside the app (no sidebar), from `design/final-home-v2.ht
 | Page | What it shows |
 |---|---|
 | **Home** `/` | Half/half split: the pitch and three doors (I pay invoices → `/review`, I send invoices → `NEXT_PUBLIC_VENDOR_URL` or the registry on NEAR Blocks, I'm a judge → `/judges`) and "How it works". The line "Live on testnet · N scams stopped, M invoices paid today" is computed on the server from the treasury's `get_payments` (Paid; Rejected) plus ledger invoices the agent rejected before reaching the chain, by day in Africa/Lagos; it falls back to "this week", then "so far", and shows no numbers if the chain can't be read (`lib/live.ts`, cached 30 s). |
+| **Get paid** `/register` | Vendor sign-up from `design/final-vendor.html`. Sign in with MyNearWallet, Meteor or HERE, then set your own payout (business name, network, token, address) with `set_vendor` on the registry. Networks mirror the contract's list (`lib/registry.ts`, kept in sync with `contracts/vendor-registry/src/lib.rs` by a test); tokens are USDC, plus USDT where 1Click lists it on that chain, with exact 1Click asset ids from `/v0/tokens` (cached 10 min); on testnet NEAR also offers tUSDC. Address checks mirror the contract. An existing entry is prefilled ("You're registered — version N…"). **Gasless first**: if the wallet implements `signDelegateActions`, the NEP-366 SignedDelegate goes to `/api/relay` and Orvantra's relayer pays; otherwise a normal transaction (the vendor pays a tiny fee). |
 | **For judges** `/judges` | Five do-this → see-that steps, the network and treasury id. `/judges/test-invoices.zip` zips `agent/fixtures/0*.{png,pdf}` + `EXPECTED.md` on the fly. |
 
 | Page | What it shows |
@@ -32,6 +33,15 @@ Two public pages sit outside the app (no sidebar), from `design/final-home-v2.ht
   contract method is not payable). If the connected account is not the treasury owner, the buttons are disabled
   and a sentence says who can approve. After signing, the page polls `/api/payments/<id>` until Paid / Rejected /
   Failed and then opens the settled record. **The server never signs owner actions.**
+- **Relay** (`POST /api/relay`, `lib/relay.ts` + `lib/server/relayer.ts`): decodes the borsh SignedDelegate and only
+  sponsors it if the receiver is the registry, it is exactly one FunctionCall to `set_vendor` or `remove_vendor`, with
+  no deposit, at most 30 TGas, not past `max_block_height`, with a valid signature, and the sender has made fewer than
+  5 relayed changes in the last hour (in memory). The relayer then sends a transaction with a `SignedDelegate` action
+  and waits for the final outcome. The registry checks `predecessor_account_id`, which stays the vendor, so the relayer
+  can only ever touch the signer's own entry. Refused on mainnet unless `ORVANTRA_ALLOW_MAINNET_RELAY=1`.
+  `npm run relay-selftest -- http://localhost:3000` checks it end to end on testnet (bob re-saves his current entry).
+  Note: the installed selector wallets (v10) do not implement `signDelegateActions` yet, so in the browser the page
+  currently falls back to the paid transaction and says so.
 - **Secrets**: the repo-root `.env` is loaded on the server only (`lib/server/config.ts`, `server-only`). The browser
   receives only the network and contract ids.
 
@@ -54,7 +64,10 @@ row merging, formatting). `npm run lint` runs ESLint.
 | `ORVANTRA_ALLOW_MAINNET` | unset | uploads refuse to sign on mainnet unless `1` |
 | `ORVANTRA_TZ` | server time zone | time zone for dates |
 | `NEXT_PUBLIC_REPO_URL` | unset | GitHub links on `/` and `/judges` (hidden when unset) |
-| `NEXT_PUBLIC_VENDOR_URL` | registry on NEAR Blocks | "I send invoices" / "For vendors" |
+| `NEXT_PUBLIC_VENDOR_URL` | `/register` | "I send invoices" / "For vendors" |
+| `RELAYER_ID` | `orvantra-relayer.testnet` | account that pays for gasless vendor updates |
+| `RELAYER_KEY_PATH` | `~/.near-credentials/<network>/<RELAYER_ID>.json` | legacy keychain JSON `{account_id, public_key, private_key}`; never logged |
+| `ORVANTRA_ALLOW_MAINNET_RELAY` | unset | the relay refuses on mainnet unless `1` |
 
 ## Do X → see Y (testnet)
 | Do | See |
@@ -66,6 +79,8 @@ row merging, formatting). `npm run lint` runs ESLint.
 | **Upload invoice** → `agent/fixtures/03-bob-small.png` | Bob's B-0008 was already paid (#1), so the steps stop after the checks: **Stopped — duplicate invoice**, no transaction. A new Bob invoice under 100 would tick through all five steps, be paid automatically, and open the list with its row selected. |
 | **Upload invoice** → `agent/fixtures/07-unknown-vendor.png` | Stops after the checks ("not a registered vendor"), no transaction; the row reads **Stopped — not a registered vendor**. |
 | `/invoices?f=paid` | Only paid rows ("Paid automatically", "Paid — approved by you"). |
+| Open `/register`, connect as `orvantra-bob.testnet` | "You're registered — version 2, …", prefilled NEAR / tUSDC / `orvantra-bob.testnet`, button "Nothing to change". Switch to Base and type `0xBAD`: "A Base address is 0x followed by 40 hex characters." |
+| `npm run relay-selftest -- http://localhost:3000` | `relay: HTTP 200 ok=true tx=…`, bob's entry unchanged, "bob paid gas: no". |
 | `/rules` | "Pay automatically up to 100.00 tUSDC." and the other limits, read from the treasury. |
 | `npm run attach -- ../agent/fixtures/04-acme-changed-bank.png` | Read-only: stores the image, readings and region boxes for an invoice proposed earlier from the command line, so its review screen shows overlays. Nothing is proposed. |
 
@@ -77,6 +92,9 @@ row merging, formatting). `npm run lint` runs ESLint.
 - `lib/verdict.ts` findings → verdict and numbered findings (pure, tested). `lib/overlay.ts` boxes → outlines and pins
   (pure, tested). `lib/rows.ts` payments + ledger + records → rows (pure, tested). `lib/activity.ts`, `lib/format.ts`.
 - `lib/server/` config (.env, ids), data loading (views), review model, the agent runner.
+- `lib/registry.ts` registry chains/limits/address rules + token options (pure, tested against the Rust source).
+  `lib/relay.ts` relay policy (pure, tested with signed delegate actions). `components/VendorPanel.tsx` the sign-up form.
+- `scripts/relay-selftest.ts` testnet relay check (signs as bob, no change to his entry).
 - `scripts/attach.mjs` read-only backfill. `scripts/screenshots.mjs` page screenshots (Playwright, dev helper).
 
 ## Known limits

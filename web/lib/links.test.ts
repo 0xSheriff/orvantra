@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { explorerAccountUrl, siteLinks } from './links';
+import { explorerAccountUrl, explorerTxUrl, siteLinks } from './links';
 
 const c = { network: 'testnet', treasuryId: 't.testnet', registryId: 'r.testnet' };
 
@@ -9,9 +9,10 @@ describe('siteLinks', () => {
     expect(explorerAccountUrl('mainnet', 'a.near')).toBe('https://nearblocks.io/address/a.near');
   });
 
-  it('defaults the vendor link to the registry on the explorer and hides an unset repo', () => {
+  it('defaults the vendor link to /register and hides an unset repo', () => {
+    expect(explorerTxUrl('testnet', 'Abc')).toBe('https://testnet.nearblocks.io/txns/Abc');
     expect(siteLinks({}, c)).toEqual({
-      vendorUrl: 'https://testnet.nearblocks.io/address/r.testnet',
+      vendorUrl: '/register',
       repoUrl: null,
       treasuryExplorer: 'https://testnet.nearblocks.io/address/t.testnet',
       registryExplorer: 'https://testnet.nearblocks.io/address/r.testnet',
