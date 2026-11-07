@@ -14,9 +14,21 @@ interface WalletState {
   error: string | null;
   connect: () => void;
   disconnect: () => Promise<void>;
-  /** Calls `method` on the treasury. Browser wallets (MyNearWallet) redirect away and back instead of resolving. */
+  /** Calls `method` on `contractId`. Browser wallets (MyNearWallet) redirect away and back instead of resolving. */
   call: (o: { method: string; args: object; gas: bigint; deposit: bigint; callbackUrl?: string }) => Promise<string | null>;
+  /** True when the signed-in wallet can sign NEP-366 delegate actions (selector `signDelegateActions`). */
+  gasless: boolean;
+  /** Signs one function call on `contractId` as a delegate action; returns the borsh SignedDelegate as base64. */
+  signDelegate: (o: { method: string; args: object; gas: bigint }) => Promise<string>;
 }
+
+/** Selector wallets that implement the meta-transaction API (wallet-selector `signDelegateActions`). */
+interface DelegateCapable {
+  signDelegateActions: (p: { delegateActions: { receiverId: string; actions: unknown[] }[] }) => Promise<{
+    signedDelegateActions: { delegateHash?: Uint8Array; signedDelegate: unknown }[];
+  }>;
+}
+const delegateCapable = (w: unknown): w is DelegateCapable => !!w && typeof (w as DelegateCapable).signDelegateActions === 'function';
 
 const Ctx = createContext<WalletState | null>(null);
 
@@ -26,10 +38,13 @@ export function useWallet(): WalletState {
   return v;
 }
 
-export function WalletProvider({ network, contractId, children }: { network: string; contractId: string; children: React.ReactNode }) {
+const OWNER_DESCRIPTION = 'Sign in with the treasury owner account to approve or reject payments.';
+
+export function WalletProvider({ network, contractId, description = OWNER_DESCRIPTION, children }: { network: string; contractId: string; description?: string; children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [accountId, setAccountId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [gasless, setGasless] = useState(false);
   const selectorRef = useRef<WalletSelector | null>(null);
   const modalRef = useRef<WalletSelectorModal | null>(null);
 
@@ -50,7 +65,7 @@ export function WalletProvider({ network, contractId, children }: { network: str
           modules: [setupMyNearWallet(), setupMeteorWallet(), setupHereWallet()],
         });
         if (cancelled) return;
-        const modal = setupModal(selector, { contractId, description: 'Sign in with the treasury owner account to approve or reject payments.' });
+        const modal = setupModal(selector, { contractId, description });
         selectorRef.current = selector;
         modalRef.current = modal;
         const sub = selector.store.observable.subscribe((state) => {
@@ -66,7 +81,37 @@ export function WalletProvider({ network, contractId, children }: { network: str
       cancelled = true;
       unsubscribe?.();
     };
-  }, [network, contractId]);
+  }, [network, contractId, description]);
+
+  // Feature-detect gasless signing whenever the signed-in account changes.
+  useEffect(() => {
+    let cancelled = false;
+    const s = selectorRef.current;
+    if (!accountId || !s) {
+      setGasless(false);
+      return;
+    }
+    s.wallet().then((w) => !cancelled && setGasless(delegateCapable(w)), () => !cancelled && setGasless(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [accountId]);
+
+  const signDelegate = useCallback<WalletState['signDelegate']>(async ({ method, args, gas }) => {
+    const s = selectorRef.current;
+    if (!s) throw new Error('The wallet is still loading.');
+    const w = await s.wallet();
+    if (!delegateCapable(w)) throw new Error('This wallet cannot sign gasless requests.');
+    const { actionCreators, encodeSignedDelegate } = await import('@near-js/transactions');
+    const res = await w.signDelegateActions({ delegateActions: [{ receiverId: contractId, actions: [actionCreators.functionCall(method, args, gas, 0n)] }] });
+    const sd = res?.signedDelegateActions?.[0]?.signedDelegate;
+    if (!sd) throw new Error('The wallet returned no signature.');
+    if (typeof sd === 'string') return sd;
+    const bytes = sd instanceof Uint8Array ? sd : encodeSignedDelegate(sd as Parameters<typeof encodeSignedDelegate>[0]);
+    let bin = '';
+    for (const b of bytes) bin += String.fromCharCode(b);
+    return btoa(bin);
+  }, [contractId]);
 
   const connect = useCallback(() => modalRef.current?.show(), []);
 
@@ -89,6 +134,9 @@ export function WalletProvider({ network, contractId, children }: { network: str
     return outcome && typeof outcome === 'object' && 'transaction' in outcome ? (outcome.transaction as { hash?: string }).hash ?? null : null;
   }, [contractId]);
 
-  const value = useMemo(() => ({ ready, accountId, error, connect, disconnect, call }), [ready, accountId, error, connect, disconnect, call]);
+  const value = useMemo(
+    () => ({ ready, accountId, error, connect, disconnect, call, gasless, signDelegate }),
+    [ready, accountId, error, connect, disconnect, call, gasless, signDelegate],
+  );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
