@@ -49,3 +49,9 @@ Verified with the owner's wallet in the web app (signed by orvantra.testnet, not
 - #1 Acme 80 tUSDC "changed bank details": rejected by owner -> Rejected, nothing moved
 - #2 Bob 12.50 tUSDC: approved by owner -> Paid
 Treasury balance 500 -> 367.50 tUSDC.
+
+## 2026-11-07 — registry security upgrade
+`orvantra-registry.testnet` code upgraded in place (state kept: 3 vendors). `set_vendor` / `remove_vendor` now
+require exactly 1 yoctoNEAR, so browser function-call keys can no longer change payouts silently.
+Verified: 0-deposit call rejected ("Requires attached deposit of exactly 1 yoctoNEAR"); gasless relay self-test ok,
+tx H2rFYdn6V6qT2cb3YQcm8ThnwRWugqk4An8p1yoJCSU8 (relayer paid gas and the 1 yocto).
