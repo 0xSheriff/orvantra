@@ -27,7 +27,7 @@ interface ResultRecord {
 
 function destination(r: ResultRecord): { href: string; text: string } {
   const st = r.payment?.status;
-  if (r.payment_id != null && st === 'Pending') return { href: `/?p=${r.payment_id}`, text: 'Held for your approval.' };
+  if (r.payment_id != null && st === 'Pending') return { href: `/review?p=${r.payment_id}`, text: 'Held for your approval.' };
   if (r.payment_id != null && st === 'Paid') return { href: `/invoices?sel=p${r.payment_id}`, text: 'Paid automatically.' };
   if (r.payment_id != null) return { href: `/invoices?sel=p${r.payment_id}`, text: `Payment #${r.payment_id} is ${st?.toLowerCase() ?? 'recorded'}.` };
   if (r.outcome === 'dry-run' || r.outcome === 'analyzed') return { href: `/invoices/u${r.id}`, text: 'Read and checked. Nothing was sent (uploads are in read-only mode).' };

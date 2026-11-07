@@ -23,7 +23,7 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ key:
       crumbs={<><Link href="/invoices">All invoices</Link> / <b>{v.title}</b></>}
       actions={
         <>
-          {row.state === 'pending' && row.payment ? <Link href={`/?p=${row.payment.id}`}>Review and approve</Link> : null}
+          {row.state === 'pending' && row.payment ? <Link href={`/review?p=${row.payment.id}`}>Review and approve</Link> : null}
           <UploadButton />
         </>
       }

@@ -24,6 +24,7 @@
     "@near-wallet-selector/modal-ui": "^10.1.4",
     "@near-wallet-selector/my-near-wallet": "^10.1.4",
     "dotenv": "^18.0.9",
+    "jszip": "^3.10.2",
     "next": "16.4.5",
     "orvantra-agent": "file:../agent",
     "react": "^19.3.1",

@@ -1,10 +1,6 @@
 import type { Metadata } from 'next';
 import { IBM_Plex_Mono, IBM_Plex_Sans, Newsreader } from 'next/font/google';
-import '@near-wallet-selector/modal-ui/styles.css';
 import './globals.css';
-import { Sidebar } from '@/components/Sidebar';
-import { WalletProvider } from '@/components/WalletProvider';
-import { publicConfig } from '@/lib/server/config';
 
 const serif = Newsreader({ subsets: ['latin'], axes: ['opsz'], variable: '--font-serif', display: 'swap' });
 const sans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-sans', display: 'swap' });
@@ -17,19 +13,11 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
+/** Fonts and the global stylesheet only. The owner app shell lives in (app)/layout; public pages in (public). */
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pub = publicConfig();
   return (
     <html lang="en" className={`${serif.variable} ${sans.variable} ${mono.variable}`}>
-      <body>
-        <a className="skip" href="#main">Skip to content</a>
-        <WalletProvider network={pub.network} contractId={pub.treasuryId}>
-          <div className="app">
-            <Sidebar />
-            <main id="main">{children}</main>
-          </div>
-        </WalletProvider>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

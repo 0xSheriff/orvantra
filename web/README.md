@@ -4,9 +4,16 @@ The owner's side of Orvantra: see what the agent read, why a payment is held, an
 NEAR wallet**. Next.js (App Router, TypeScript), one global stylesheet with the tokens of the approved mockups
 (`design/final-review.html`, `design/final-list.html`), fonts via `next/font` (Newsreader, IBM Plex Sans, IBM Plex Mono).
 
+Two public pages sit outside the app (no sidebar), from `design/final-home-v2.html` and `design/final-judges.html`:
+
 | Page | What it shows |
 |---|---|
-| **Needs approval** `/` | One held payment at a time (`1 of N · Next`). Left: the uploaded invoice (PDFs rendered to PNG) with outlines and numbered pins placed from reader A's boxes (green = verified field, red = finding). Right: a plain-English verdict built from the findings without an LLM (`lib/verdict.ts`), the numbered findings, and the dark **If you approve** panel with Approve / Reject. |
+| **Home** `/` | Half/half split: the pitch and three doors (I pay invoices → `/review`, I send invoices → `NEXT_PUBLIC_VENDOR_URL` or the registry on NEAR Blocks, I'm a judge → `/judges`) and "How it works". The line "Live on testnet · N scams stopped, M invoices paid today" is computed on the server from the treasury's `get_payments` (Paid; Rejected) plus ledger invoices the agent rejected before reaching the chain, by day in Africa/Lagos; it falls back to "this week", then "so far", and shows no numbers if the chain can't be read (`lib/live.ts`, cached 30 s). |
+| **For judges** `/judges` | Five do-this → see-that steps, the network and treasury id. `/judges/test-invoices.zip` zips `agent/fixtures/0*.{png,pdf}` + `EXPECTED.md` on the fly. |
+
+| Page | What it shows |
+|---|---|
+| **Needs approval** `/review` | One held payment at a time (`1 of N · Next`). Left: the uploaded invoice (PDFs rendered to PNG) with outlines and numbered pins placed from reader A's boxes (green = verified field, red = finding). Right: a plain-English verdict built from the findings without an LLM (`lib/verdict.ts`), the numbered findings, and the dark **If you approve** panel with Approve / Reject. |
 | **All invoices** `/invoices` | Ruled list with All / Held / Paid / Stopped filters: on-chain payments merged with the agent ledger and web uploads (`lib/rows.ts`). A row opens the read-only review screen `/invoices/<key>`. |
 | **Vendors** `/vendors` | Approved vendors (treasury policy) joined with their registry entry: payout address and route, version, how long ago it changed, per-invoice limit, spend this month against the cap. |
 | **Rules & limits** `/rules` | The treasury config written as sentences ("Pay automatically up to 100.00 tUSDC."). Read-only. |
@@ -46,11 +53,13 @@ row merging, formatting). `npm run lint` runs ESLint.
 | `ORVANTRA_UPLOAD_MODE` | `execute` | `dry-run` or `analyze` makes uploads read-only (nothing proposed) |
 | `ORVANTRA_ALLOW_MAINNET` | unset | uploads refuse to sign on mainnet unless `1` |
 | `ORVANTRA_TZ` | server time zone | time zone for dates |
+| `NEXT_PUBLIC_REPO_URL` | unset | GitHub links on `/` and `/judges` (hidden when unset) |
+| `NEXT_PUBLIC_VENDOR_URL` | registry on NEAR Blocks | "I send invoices" / "For vendors" |
 
 ## Do X → see Y (testnet)
 | Do | See |
 |---|---|
-| Open `/` | The held Acme invoice INV-2026-0150 with a red outline on "Our payout address has changed…", the headline **This invoice asks you to pay someone else.**, findings 1 Known vendor · 2 Read twice, privately · 3 Different payout address · 4 First payment to this vendor, and the 80.00 tUSDC panel paying `0x3333…3333` (the registry address, not the invoice's `0x9999…`). |
+| Open `/review` | The held Acme invoice INV-2026-0150 with a red outline on "Our payout address has changed…", the headline **This invoice asks you to pay someone else.**, findings 1 Known vendor · 2 Read twice, privately · 3 Different payout address · 4 First payment to this vendor, and the 80.00 tUSDC panel paying `0x3333…3333` (the registry address, not the invoice's `0x9999…`). |
 | Click **Connect wallet** | The wallet selector with MyNearWallet, Meteor and HERE. |
 | Sign in with an account that is not `orvantra-owner.testnet` | Approve and Reject disabled: "Only the treasury owner, orvantra-owner.testnet, can approve or reject this payment." |
 | Sign in as the owner, click **Approve** | Your wallet asks to sign `approve_payment` (1 yoctoNEAR); then "Signed. The treasury is checking Acme Design Studio's registry entry and paying…", then **Paid.** and the paid record. |
@@ -61,7 +70,8 @@ row merging, formatting). `npm run lint` runs ESLint.
 | `npm run attach -- ../agent/fixtures/04-acme-changed-bank.png` | Read-only: stores the image, readings and region boxes for an invoice proposed earlier from the command line, so its review screen shows overlays. Nothing is proposed. |
 
 ## Files
-- `app/` pages and API routes (`api/upload`, `api/payments/[id]`, `api/files/[name]`).
+- `app/(public)/` home and judges pages (+ the zip route); `app/(app)/` the owner app with its sidebar layout.
+- `app/` API routes (`api/upload`, `api/payments/[id]`, `api/files/[name]`).
 - `components/` `ReviewScreen`, `ApprovePanel` (wallet signing + polling), `UploadButton` (progress dialog),
   `WalletProvider`, `Sidebar`, `NavList`, `WalletStatus`.
 - `lib/verdict.ts` findings → verdict and numbered findings (pure, tested). `lib/overlay.ts` boxes → outlines and pins
