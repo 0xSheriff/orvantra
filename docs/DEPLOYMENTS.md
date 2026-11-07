@@ -37,3 +37,15 @@ Verified run (`scripts/testnet-day5.sh` + manual checks):
 - prove-key-limits: 4/4 refused (set_limits, withdraw, token ft_transfer, NEAR transfer) with InvalidAccessKeyError
 - storage registration fix: `orvantra-acme.testnet` was NOT registered on tUSDC; owner withdraw 1 tUSDC to it succeeded
   (treasury registered it first). tx 5ydQLZfHk6K1YPa3fmaV5Sa5q58UJ3pCFjj36nGoYy69
+
+## Day 6 (2026-11-07) — treasury v3 owned by the real owner wallet
+| Contract / role | Account | Notes |
+|---|---|---|
+| treasury v3 | `orvantra-treasury-v3.testnet` | owner `orvantra.testnet` (owner's own wallet), initial vendor policies set at init |
+| agent key | `ed25519:D8LqFgFhWJYVUkh7reRK78uffqSk1GwdqoPYRTttNpR4` | function-call only: `propose_payment` on treasury v3 |
+
+Verified with the owner's wallet in the web app (signed by orvantra.testnet, not by the server):
+- #0 Acme 120 tUSDC: approved by owner -> Paid (simulated 1Click deposit)
+- #1 Acme 80 tUSDC "changed bank details": rejected by owner -> Rejected, nothing moved
+- #2 Bob 12.50 tUSDC: approved by owner -> Paid
+Treasury balance 500 -> 367.50 tUSDC.
