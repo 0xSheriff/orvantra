@@ -20,7 +20,11 @@ export interface LedgerEntry {
   vendor: string | null;
   amount: string | null;
   invoice_number: string | null;
+  /** Vendor name as read from the invoice (newer entries only). */
+  vendor_name?: string | null;
   decision: string;
+  /** Why the latest analysis did not simply propose (rejects first, then holds). Newer entries only. */
+  reasons?: string[];
   path?: string;
   agent_flags?: string[];
   quote?: Record<string, unknown> & { quote_hash: string | null; simulated: boolean };

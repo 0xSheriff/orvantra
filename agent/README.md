@@ -221,3 +221,20 @@ the duplicate hash anyway; this saves the key's allowance).
   quote deadline, 1Click refunds the deposit to the treasury. Track it with `npm run oneclick-status`.
 - `npm audit` reports a low-severity advisory in `elliptic`, which `@nearai/inference-sdk` pulls in through
   `@phala/dcap-qvl`. No fix is available yet.
+
+## Telegram alerts
+
+The notifier watches the treasury and messages the owner when a payment is **held for you**, **paid**,
+**rejected** or **failed**, and when the agent **stops** an invoice before anything reaches the chain.
+Approvals are never done from Telegram: every message links to the app, where the owner signs in their own
+wallet. A hijacked Telegram account cannot move money.
+
+1. In Telegram, open @BotFather, send `/newbot`, and put the token in the repo-root `.env` as `TELEGRAM_BOT_TOKEN`.
+2. Open your bot and press **Start**, then run `npm run notifier -- --link` → it prints your chat id (and replies to
+   you in Telegram). Put it in `.env` as `TELEGRAM_CHAT_ID`.
+3. `npm run notifier -- --test` → you receive one sample "Held for you" message.
+4. `npm run notifier` (keep it running next to the web app) → on its first run it records the current state
+   silently; after that each change produces exactly one message. Set `ORVANTRA_APP_URL` so the
+   "Review in Orvantra" button opens your app.
+
+State lives in `agent/data/notifier-state.json` (git-ignored); switching `TREASURY_ID` starts fresh.

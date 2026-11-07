@@ -22,7 +22,8 @@
     "quote": "tsx scripts/quote.ts",
     "oneclick-status": "tsx scripts/oneclick-status.ts",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "notifier": "tsx src/notify/run.ts"
   },
   "dependencies": {
     "@defuse-protocol/one-click-sdk-typescript": "^0.1.26",
