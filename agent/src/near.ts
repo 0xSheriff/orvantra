@@ -109,7 +109,7 @@ export function nearConfig(env: NodeJS.ProcessEnv = process.env): NearConfig {
     network,
     rpcUrls: list.length ? list : DEFAULT_RPC_URLS[network] ?? [`https://rpc.${network}.near.org`],
     registryId: env.REGISTRY_ID ?? 'orvantra-registry.testnet',
-    treasuryId: env.TREASURY_ID ?? 'orvantra-treasury.testnet',
+    treasuryId: env.TREASURY_ID ?? 'orvantra-treasury-v3.testnet',
     cacheTtlMs: env.NEAR_VIEW_CACHE_MS !== undefined && Number.isFinite(ttl) && ttl >= 0 ? ttl : 30_000,
     retry: DEFAULT_RETRY,
   };
