@@ -132,7 +132,10 @@ export async function payInvoice(file: string, opts: PayOptions, hooks: PayHooks
     skipRest(['quote', 'propose']);
     return stop('no-hash', 1, 'STOP: no invoice_hash (vendor account / number / amount unreadable) — nothing sent.');
   }
-  record({ vendor: inv?.vendor_account ?? null, amount: d.amount_base_units, invoice_number: inv?.invoice_number ?? null, decision: d.action }, `analyzed:${d.action}`);
+  record({
+    vendor: inv?.vendor_account ?? null, vendor_name: inv?.vendor_name || null, amount: d.amount_base_units,
+    invoice_number: inv?.invoice_number ?? null, decision: d.action, reasons: d.reasons,
+  }, `analyzed:${d.action}`);
 
   if (d.action === 'reject') {
     skipRest(['quote', 'propose']);
