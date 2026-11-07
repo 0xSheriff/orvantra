@@ -134,3 +134,8 @@ export function relativeTime(ns: string, nowMs: number): string {
 /** Gas and method limits shared by the page and the relay. */
 export const SET_VENDOR_GAS = 30_000_000_000_000n;
 export const RELAY_METHODS = ['set_vendor', 'remove_vendor'] as const;
+/**
+ * set_vendor / remove_vendor require EXACTLY 1 yoctoNEAR. Function-call access keys cannot attach deposits, so a
+ * payout change always needs the vendor's full-access key (an explicit wallet confirmation).
+ */
+export const REGISTRY_DEPOSIT = 1n;

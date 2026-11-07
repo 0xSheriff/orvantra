@@ -7,6 +7,7 @@ import { RateLimiter, checkSignedDelegate, decodeSignedDelegate, outcomeFailure 
 
 const REGISTRY = 'orvantra-registry.testnet';
 const TGAS = 1_000_000_000_000n;
+const YOCTO = 1n; // the registry requires exactly 1 yoctoNEAR on set_vendor / remove_vendor
 const kp = KeyPair.fromRandom('ed25519');
 const signer = new KeyPairSigner(kp);
 const args = { display_name: 'Acme', chain: 'base', asset_id: 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near', address: `0x${'3'.repeat(40)}` };
@@ -15,7 +16,7 @@ async function signed(o: { receiverId?: string; actions?: Action[]; maxBlockHeig
   const da = buildDelegateAction({
     senderId: o.senderId ?? 'acme.testnet',
     receiverId: o.receiverId ?? REGISTRY,
-    actions: o.actions ?? [actionCreators.functionCall('set_vendor', args, 30n * TGAS, 0n)],
+    actions: o.actions ?? [actionCreators.functionCall('set_vendor', args, 30n * TGAS, YOCTO)],
     nonce: 7n,
     maxBlockHeight: o.maxBlockHeight ?? 1_100n,
     publicKey: kp.getPublicKey(),
@@ -30,7 +31,7 @@ const check = async (b64: Promise<string>, currentHeight = 1_000n) =>
 describe('relay policy', () => {
   it('accepts set_vendor and remove_vendor on the registry', async () => {
     expect(await check(signed())).toEqual({ ok: true, senderId: 'acme.testnet', method: 'set_vendor' });
-    const rm = await check(signed({ actions: [actionCreators.functionCall('remove_vendor', {}, 10n * TGAS, 0n)] }));
+    const rm = await check(signed({ actions: [actionCreators.functionCall('remove_vendor', {}, 10n * TGAS, YOCTO)] }));
     expect(rm).toMatchObject({ ok: true, method: 'remove_vendor' });
   });
 
@@ -41,22 +42,27 @@ describe('relay policy', () => {
   });
 
   it('rejects another method', async () => {
-    const r = await check(signed({ actions: [actionCreators.functionCall('get_vendor', {}, 10n * TGAS, 0n)] }));
+    const r = await check(signed({ actions: [actionCreators.functionCall('get_vendor', {}, 10n * TGAS, YOCTO)] }));
     expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/Only set_vendor and remove_vendor/) });
   });
 
-  it('rejects a deposit', async () => {
-    const r = await check(signed({ actions: [actionCreators.functionCall('set_vendor', args, 30n * TGAS, 1n)] }));
-    expect(r).toMatchObject({ ok: false, reason: 'No deposit may be attached.' });
+  it('requires exactly 1 yoctoNEAR: rejects 0 and anything above 1', async () => {
+    const reason = 'Exactly 1 yoctoNEAR must be attached.';
+    for (const method of ['set_vendor', 'remove_vendor']) {
+      for (const deposit of [0n, 2n, 10n ** 24n]) {
+        const r = await check(signed({ actions: [actionCreators.functionCall(method, method === 'set_vendor' ? args : {}, 30n * TGAS, deposit)] }));
+        expect(r).toMatchObject({ ok: false, reason });
+      }
+    }
   });
 
   it('rejects more than 30 TGas', async () => {
-    const r = await check(signed({ actions: [actionCreators.functionCall('set_vendor', args, 30n * TGAS + 1n, 0n)] }));
+    const r = await check(signed({ actions: [actionCreators.functionCall('set_vendor', args, 30n * TGAS + 1n, YOCTO)] }));
     expect(r).toMatchObject({ ok: false, reason: expect.stringMatching(/30 TGas/) });
   });
 
   it('rejects multiple actions and non-function-call actions', async () => {
-    const two = [actionCreators.functionCall('set_vendor', args, 10n * TGAS, 0n), actionCreators.functionCall('remove_vendor', {}, 10n * TGAS, 0n)];
+    const two = [actionCreators.functionCall('set_vendor', args, 10n * TGAS, YOCTO), actionCreators.functionCall('remove_vendor', {}, 10n * TGAS, YOCTO)];
     expect(await check(signed({ actions: two }))).toMatchObject({ ok: false, reason: 'Exactly one action is allowed.' });
     expect(await check(signed({ actions: [actionCreators.transfer(1n)] }))).toMatchObject({ ok: false, reason: 'Only a function call is allowed.' });
   });

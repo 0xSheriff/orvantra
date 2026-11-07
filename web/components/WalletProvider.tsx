@@ -18,8 +18,11 @@ interface WalletState {
   call: (o: { method: string; args: object; gas: bigint; deposit: bigint; callbackUrl?: string }) => Promise<string | null>;
   /** True when the signed-in wallet can sign NEP-366 delegate actions (selector `signDelegateActions`). */
   gasless: boolean;
-  /** Signs one function call on `contractId` as a delegate action; returns the borsh SignedDelegate as base64. */
-  signDelegate: (o: { method: string; args: object; gas: bigint }) => Promise<string>;
+  /**
+   * Signs one function call on `contractId` as a delegate action; returns the borsh SignedDelegate as base64.
+   * `deposit` comes from the signer's own balance when the relayer submits it (the relayer only pays gas).
+   */
+  signDelegate: (o: { method: string; args: object; gas: bigint; deposit: bigint }) => Promise<string>;
 }
 
 /** Selector wallets that implement the meta-transaction API (wallet-selector `signDelegateActions`). */
@@ -97,13 +100,13 @@ export function WalletProvider({ network, contractId, description = OWNER_DESCRI
     };
   }, [accountId]);
 
-  const signDelegate = useCallback<WalletState['signDelegate']>(async ({ method, args, gas }) => {
+  const signDelegate = useCallback<WalletState['signDelegate']>(async ({ method, args, gas, deposit }) => {
     const s = selectorRef.current;
     if (!s) throw new Error('The wallet is still loading.');
     const w = await s.wallet();
     if (!delegateCapable(w)) throw new Error('This wallet cannot sign gasless requests.');
     const { actionCreators, encodeSignedDelegate } = await import('@near-js/transactions');
-    const res = await w.signDelegateActions({ delegateActions: [{ receiverId: contractId, actions: [actionCreators.functionCall(method, args, gas, 0n)] }] });
+    const res = await w.signDelegateActions({ delegateActions: [{ receiverId: contractId, actions: [actionCreators.functionCall(method, args, gas, deposit)] }] });
     const sd = res?.signedDelegateActions?.[0]?.signedDelegate;
     if (!sd) throw new Error('The wallet returned no signature.');
     if (typeof sd === 'string') return sd;

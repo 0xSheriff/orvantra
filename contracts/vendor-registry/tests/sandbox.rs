@@ -12,6 +12,8 @@ use serde_json::{json, Value};
 const USDC_BASE: &str = "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near";
 const ALICE_ADDR: &str = "0x1111111111111111111111111111111111111111";
 const BOB_ADDR: &str = "0x2222222222222222222222222222222222222222";
+/// set_vendor / remove_vendor require exactly 1 yoctoNEAR (forces a full-access key).
+const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
 
 #[tokio::test]
 async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
@@ -42,6 +44,7 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": ALICE_ADDR,
         }))
+        .deposit(ONE_YOCTO)
         .transact()
         .await?;
     assert!(res.is_success(), "alice set_vendor failed: {res:?}");
@@ -58,12 +61,20 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": BOB_ADDR,
         }))
+        .deposit(ONE_YOCTO)
         .transact()
         .await?;
     assert!(res.is_success(), "bob set_vendor failed: {res:?}");
 
     // Bob also cannot remove alice's entry: remove_vendor only removes the caller's own entry.
-    bob.call(contract.id(), "remove_vendor").transact().await?.into_result()?;
+    // Without the 1 yoctoNEAR (as a function-call access key would send) the call fails.
+    let res = bob.call(contract.id(), "remove_vendor").transact().await?;
+    assert!(res.is_failure(), "remove_vendor without 1 yocto must fail");
+    bob.call(contract.id(), "remove_vendor")
+        .deposit(ONE_YOCTO)
+        .transact()
+        .await?
+        .into_result()?;
 
     // Alice's entry is untouched.
     let a: Value = contract
@@ -113,6 +124,7 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": BOB_ADDR,
         }))
+        .deposit(ONE_YOCTO)
         .transact()
         .await?;
     assert!(res.is_success());
@@ -135,6 +147,7 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": "0xBAD",
         }))
+        .deposit(ONE_YOCTO)
         .transact()
         .await?;
     assert!(res.is_failure());

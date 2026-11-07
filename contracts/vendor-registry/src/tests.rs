@@ -12,11 +12,16 @@ fn acc(s: &str) -> AccountId {
     s.parse().unwrap()
 }
 
-/// Set the caller and block time for the next calls.
+/// Set the caller and block time for the next calls, attaching the required 1 yoctoNEAR.
 fn as_caller(who: &str, ts: u64) {
+    as_caller_with_deposit(who, ts, 1);
+}
+
+fn as_caller_with_deposit(who: &str, ts: u64, yocto: u128) {
     testing_env!(VMContextBuilder::new()
         .predecessor_account_id(acc(who))
         .block_timestamp(ts)
+        .attached_deposit(near_sdk::NearToken::from_yoctonear(yocto))
         .build());
 }
 
@@ -301,4 +306,64 @@ fn callers_only_touch_their_own_entry() {
     assert_eq!(acme.payout.address, EVM_ADDR);
     assert_eq!(acme.version, 1);
     assert_eq!(c.get_vendor(acc("bob.near")).unwrap().payout.address, EVM_ADDR_2);
+}
+
+// 1 yoctoNEAR requirement: function-call access keys cannot attach deposits, so these calls always
+// need a full-access key (an explicit wallet confirmation).
+
+const ONE_YOCTO_ERR: &str = "Requires attached deposit of exactly 1 yoctoNEAR";
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn set_vendor_rejects_zero_deposit() {
+    as_caller_with_deposit("acme.near", 1, 0);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn set_vendor_rejects_two_yocto() {
+    as_caller_with_deposit("acme.near", 1, 2);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn remove_vendor_rejects_zero_deposit() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    as_caller_with_deposit("acme.near", 2, 0);
+    c.remove_vendor();
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+fn remove_vendor_rejects_two_yocto() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    as_caller_with_deposit("acme.near", 2, 2);
+    c.remove_vendor();
+}
+
+#[test]
+fn rejected_deposit_leaves_entry_unchanged() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+
+    as_caller_with_deposit("acme.near", 2, 0);
+    let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        c.set_vendor("Acme Ltd".into(), "base".into(), USDC_BASE.into(), EVM_ADDR_2.into())
+    }));
+    let msg = res.unwrap_err();
+    let msg = msg.downcast_ref::<String>().map(String::as_str).unwrap_or("");
+    assert!(msg.contains(ONE_YOCTO_ERR), "unexpected panic: {msg}");
+
+    let v = c.get_vendor(acc("acme.near")).unwrap();
+    assert_eq!(v.payout.address, EVM_ADDR);
+    assert_eq!(v.version, 1);
 }

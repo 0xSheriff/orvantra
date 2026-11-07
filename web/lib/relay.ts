@@ -9,7 +9,7 @@ import { deserialize } from 'borsh';
 import { PublicKey } from '@near-js/crypto';
 import { SCHEMA, encodeDelegateAction } from '@near-js/transactions';
 import type { SignedDelegate } from '@near-js/transactions';
-import { RELAY_METHODS, SET_VENDOR_GAS, isValidNearAccountId } from './registry';
+import { REGISTRY_DEPOSIT, RELAY_METHODS, SET_VENDOR_GAS, isValidNearAccountId } from './registry';
 
 export const MAX_RELAY_GAS = SET_VENDOR_GAS;
 /** A SignedDelegate for one small function call is a few hundred bytes; refuse anything far larger before decoding. */
@@ -59,8 +59,9 @@ export function signatureValid(sd: SignedDelegate): boolean {
 }
 
 /**
- * Policy: receiver is the registry; exactly one FunctionCall to set_vendor/remove_vendor; no deposit; at most 30 TGas;
- * not expired; valid signature. `currentHeight` is the latest final block height.
+ * Policy: receiver is the registry; exactly one FunctionCall to set_vendor/remove_vendor; deposit exactly 1 yoctoNEAR
+ * (the registry requires it; in a meta transaction it comes from the vendor's balance, not the relayer's); at most
+ * 30 TGas; not expired; valid signature. `currentHeight` is the latest final block height.
  */
 export function checkSignedDelegate(sd: SignedDelegate, o: { registryId: string; currentHeight: bigint }): RelayCheck {
   const da = sd.delegateAction;
@@ -71,7 +72,7 @@ export function checkSignedDelegate(sd: SignedDelegate, o: { registryId: string;
   const fc = (da.actions[0] as unknown as Plain).functionCall as { methodName: string; gas: bigint; deposit: bigint } | undefined;
   if (!fc) return no('Only a function call is allowed.');
   if (!(RELAY_METHODS as readonly string[]).includes(fc.methodName)) return no(`Only ${RELAY_METHODS.join(' and ')} are allowed.`);
-  if (BigInt(fc.deposit) !== 0n) return no('No deposit may be attached.');
+  if (BigInt(fc.deposit) !== REGISTRY_DEPOSIT) return no('Exactly 1 yoctoNEAR must be attached.');
   if (BigInt(fc.gas) > MAX_RELAY_GAS) return no(`At most ${MAX_RELAY_GAS / 1_000_000_000_000n} TGas is allowed.`);
   if (BigInt(da.maxBlockHeight) <= o.currentHeight) return no('This signature has expired. Please save again.');
   if (!signatureValid(sd)) return no('The signature does not match the request.');

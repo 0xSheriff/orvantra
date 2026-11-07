@@ -4,7 +4,8 @@
 // Signs a NEP-366 delegate action as orvantra-bob.testnet (legacy keychain file
 // ~/.near-credentials/testnet/orvantra-bob.testnet.json, override with BOB_KEY_PATH) calling
 // registry.set_vendor with bob's CURRENT values from get_vendor, so the entry does not change (an identical payout
-// does not bump the version). Posts it to /api/relay; the relayer account pays the fee. Prints the tx hash.
+// does not bump the version), with the required 1 yoctoNEAR attached. Posts it to /api/relay; the relayer account
+// pays the gas fee. Prints the tx hash.
 // Testnet only. Never prints keys.
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -45,7 +46,8 @@ const signedDelegate = await bob.signedDelegate({
     chain: before.payout.chain,
     asset_id: before.payout.asset_id,
     address: before.payout.address,
-  }, 30_000_000_000_000n, 0n)],
+  // The registry requires exactly 1 yoctoNEAR; inside a meta transaction it comes from bob's balance.
+  }, 30_000_000_000_000n, 1n)],
 });
 const b64 = Buffer.from(encodeSignedDelegate(signedDelegate)).toString('base64');
 
@@ -57,5 +59,7 @@ if (body.txHash) console.log(`explorer: https://testnet.nearblocks.io/txns/${bod
 const after = await getVendor();
 const balanceAfter = await bob.getBalance();
 console.log(`after:  ${BOB} v${after?.version} ${after?.payout.chain} ${after?.payout.asset_id} ${after?.payout.address}`);
-console.log(`bob paid gas: ${balanceBefore === balanceAfter ? 'no (balance unchanged)' : `yes? balance ${balanceBefore} -> ${balanceAfter}`}`);
+// Bob pays only the 1 yoctoNEAR deposit; the relayer pays the gas.
+const spent = BigInt(balanceBefore) - BigInt(balanceAfter);
+console.log(`bob paid gas: ${spent === 1n ? 'no (only the 1 yoctoNEAR deposit)' : `yes? balance ${balanceBefore} -> ${balanceAfter} (spent ${spent} yocto)`}`);
 process.exit(body.ok ? 0 : 1);
