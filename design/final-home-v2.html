@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Home v2</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f3ec;--sheet:#fbf9f4;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule-2:#cfc8b8;
+--d-text:#efeae0;--d-2:#a9a396;--d-3:#7d786d;--d-rule:#36332d;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.page{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+.left{background:var(--paper);color:var(--ink);padding:30px 56px 34px;display:flex;flex-direction:column}
+.right{background:var(--ink);color:var(--d-text);padding:30px 56px 34px;display:flex;flex-direction:column}
+.top{display:flex;justify-content:space-between;align-items:center;height:36px}
+.logo{font-family:var(--serif);font-size:24px;letter-spacing:-.01em}
+.right .top{justify-content:flex-end;gap:26px;font-size:14px}
+.right .top a{color:var(--d-2);text-decoration:none}
+.right .top a.open{color:var(--d-text);border:1px solid #5b574e;padding:7px 14px}
+.left .mid{margin:auto 0}
+h1{font-family:var(--serif);font-weight:400;font-size:60px;line-height:1.03;letter-spacing:-.024em;max-width:520px}
+.lede{font-size:17px;line-height:1.55;color:var(--ink-2);max-width:460px;margin-top:20px}
+.doors{margin-top:38px;border-top:1px solid var(--rule-2);max-width:480px}
+.doors a{display:grid;grid-template-columns:1fr auto;padding:17px 0;border-bottom:1px solid var(--rule-2);color:var(--ink);text-decoration:none}
+.doors b{font-weight:500;font-size:16px}
+.doors span{color:var(--muted);font-size:13px}
+.doors i{grid-row:1/3;grid-column:2;align-self:center;font-style:normal;font-family:var(--serif);font-size:22px}
+.foot{font-size:12.5px;color:var(--muted)}
+.right .mid{margin:auto 0;max-width:500px}
+.lbl{font-size:12.5px;color:var(--d-2);margin-bottom:14px}
+.steps{list-style:none;counter-reset:s;border-top:1px solid var(--d-rule)}
+.steps li{counter-increment:s;display:grid;grid-template-columns:36px 1fr;padding:15px 0;border-bottom:1px solid var(--d-rule);font-size:15px}
+.steps li:before{content:counter(s);font-family:var(--mono);font-size:13px;color:var(--d-3);padding-top:2px}
+.steps small{display:block;color:var(--d-2);font-size:13px;margin-top:2px}
+.live{margin-top:34px;font-size:13px;color:var(--d-2);display:flex;justify-content:space-between;border-top:1px solid var(--d-rule);padding-top:14px}
+.live b{color:var(--d-text);font-weight:500}
+.live a{color:var(--d-text)}
+</style></head><body>
+<div class="page">
+  <section class="left">
+    <div class="top"><div class="logo">Orvantra</div></div>
+    <div class="mid">
+      <h1>The accounts-payable clerk that can't be tricked.</h1>
+      <p class="lede">It reads your invoices privately and pays vendors in stablecoins on any chain — only to the address they registered on NEAR, and only within your limits.</p>
+      <nav class="doors">
+        <a href="#"><b>I pay invoices</b><span>Open your treasury and approve what's held</span><i>→</i></a>
+        <a href="#"><b>I send invoices</b><span>Register how you want to be paid — free</span><i>→</i></a>
+        <a href="#"><b>I'm a judge</b><span>Try it on testnet in five steps</span><i>→</i></a>
+      </nav>
+    </div>
+    <div class="foot">Built on NEAR · NEAR Hackathon 2026</div>
+  </section>
+  <section class="right">
+    <div class="top"><a href="#">For vendors</a><a href="#">For judges</a><a href="#">GitHub</a><a class="open" href="#">Open app</a></div>
+    <div class="mid">
+      <div class="lbl">How it works</div>
+      <ol class="steps">
+        <li><span>You forward an invoice<small>PDF, photo or email</small></span></li>
+        <li><span>Two models read it privately<small>inside NEAR AI's secure hardware; both must agree</small></span></li>
+        <li><span>It's checked against the vendor's own record<small>addresses printed on invoices are ignored</small></span></li>
+        <li><span>Your rules decide<small>small known invoices pay themselves; the rest wait for your signature</small></span></li>
+        <li><span>The vendor is paid their way<small>USDC on NEAR, Base, Solana and more via NEAR Intents</small></span></li>
+      </ol>
+      <div class="live"><span>Live on testnet · <b>1 scam stopped</b>, <b>2 invoices paid</b> today</span><a href="#">Explorer →</a></div>
+    </div>
+    <div class="foot" style="color:var(--d-3)">NEAR Intents · NEAR AI Cloud · Open source</div>
+  </section>
+</div></body></html>

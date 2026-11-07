@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Home B</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f3ec;--sheet:#fbf9f4;--white:#fffefb;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule:#e2ddd1;--rule-2:#cfc8b8;--green:#1f4d3a;--amber:#8a5a12;--red:#8c2f22;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.page{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+.left{padding:34px 56px;display:flex;flex-direction:column}
+.logo{font-family:var(--serif);font-size:24px}
+.left .mid{margin:auto 0}
+h1{font-family:var(--serif);font-weight:400;font-size:58px;line-height:1.04;letter-spacing:-.022em;max-width:540px}
+.lede{font-size:17px;color:var(--ink-2);max-width:480px;margin-top:20px}
+.choose{margin-top:36px;border-top:1px solid var(--rule-2);max-width:500px}
+.choose a{display:grid;grid-template-columns:1fr auto;padding:18px 0;border-bottom:1px solid var(--rule-2);color:var(--ink);text-decoration:none}
+.choose a b{font-weight:500;font-size:16px}
+.choose a span{color:var(--muted);font-size:13px;grid-column:1}
+.choose a i{grid-row:1/3;grid-column:2;align-self:center;font-style:normal;font-family:var(--serif);font-size:22px}
+.foot{font-size:12.5px;color:var(--muted)}
+.right{background:var(--ink);color:var(--sheet);padding:34px 48px;display:flex;flex-direction:column;justify-content:center;gap:0}
+.right .lbl{font-size:12px;color:#a9a396;margin-bottom:14px}
+.log{border-top:1px solid #36332d}
+.e{display:grid;grid-template-columns:78px 1fr auto;gap:14px;padding:15px 0;border-bottom:1px solid #36332d;font-size:13.5px}
+.e time{font-family:var(--mono);font-size:12px;color:#8f8a7e}
+.e .a{font-family:var(--mono)}
+.e small{display:block;color:#a9a396;font-size:12px;margin-top:2px}
+.e .s{font-size:12px;text-align:right}
+.ok{color:#9cc5ad}.hold{color:#e0b46a}.stop{color:#e39a8c}
+.note{margin-top:20px;font-size:12.5px;color:#a9a396;max-width:460px}
+.note a{color:var(--sheet)}
+</style></head><body>
+<div class="page">
+  <section class="left">
+    <div class="logo">Orvantra</div>
+    <div class="mid">
+      <h1>The accounts-payable clerk that can't be tricked.</h1>
+      <p class="lede">An AI that reads your invoices privately and pays vendors in stablecoins on any chain — but only to the address the vendor registered on NEAR, and only within your limits.</p>
+      <nav class="choose">
+        <a href="#"><b>I pay invoices</b><span>Open your treasury, set rules, approve what's held</span><i>→</i></a>
+        <a href="#"><b>I send invoices</b><span>Register how you want to be paid — free, no NEAR needed</span><i>→</i></a>
+        <a href="#"><b>I'm a judge</b><span>Try it on testnet in three steps</span><i>→</i></a>
+      </nav>
+    </div>
+    <div class="foot">NEAR Intents · NEAR AI Cloud · Rust contracts · Open source</div>
+  </section>
+  <section class="right">
+    <div class="lbl">Live on testnet · orvantra-treasury-v3</div>
+    <div class="log">
+      <div class="e"><time>03:11</time><div>Bob's Bakery Supplies <small>B-0008 · approved by owner</small></div><div><span class="a">12.50</span><div class="s ok">Paid</div></div></div>
+      <div class="e"><time>03:10</time><div>Acme Design Studio <small>INV-2026-0150 · asked to pay a different address</small></div><div><span class="a">80.00</span><div class="s stop">Rejected</div></div></div>
+      <div class="e"><time>03:09</time><div>Acme Design Studio <small>INV-2026-0142 · above 100 limit, approved</small></div><div><span class="a">120.00</span><div class="s ok">Paid</div></div></div>
+      <div class="e"><time>22:31</time><div>Agent proposed 3 payments <small>read by two private models, both TEE-signed</small></div><div><div class="s hold">Held</div></div></div>
+    </div>
+    <p class="note">Every row is a real on-chain record. <a href="#">See it on the explorer →</a></p>
+  </section>
+</div></body></html>

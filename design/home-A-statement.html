@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Home A</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f3ec;--sheet:#fbf9f4;--white:#fffefb;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule:#e2ddd1;--rule-2:#cfc8b8;--green:#1f4d3a;--amber:#8a5a12;--red:#8c2f22;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+header{display:flex;align-items:center;justify-content:space-between;padding:26px 0;border-bottom:1px solid var(--rule-2)}
+.logo{font-family:var(--serif);font-size:24px;letter-spacing:-.01em}
+header nav{display:flex;gap:28px;font-size:14px;color:var(--ink-2)}
+header nav a{color:inherit;text-decoration:none}
+.cta{font-size:14px;border:1px solid var(--ink);padding:9px 16px;color:var(--ink);text-decoration:none}
+.cta.dark{background:var(--ink);color:var(--sheet)}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;padding:72px 0 64px;border-bottom:1px solid var(--rule-2);align-items:end}
+.hero h1{font-family:var(--serif);font-weight:400;font-size:68px;line-height:1.02;letter-spacing:-.025em}
+.hero p{font-size:18px;color:var(--ink-2);max-width:470px;margin-top:22px}
+.hero .actions{display:flex;gap:12px;margin-top:30px}
+.memo{background:var(--white);padding:26px 28px;box-shadow:0 18px 40px -22px rgba(60,45,20,.3);font-size:13px}
+.memo .from{color:var(--muted);font-size:12px}
+.memo .subj{font-weight:600;margin:4px 0 12px}
+.memo .body{color:var(--ink-2)}
+.memo .bad{outline:2px solid var(--red);outline-offset:3px}
+.memo .verdict{margin-top:18px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--serif);font-size:20px;line-height:1.2}
+.memo .verdict small{display:block;font-family:var(--sans);font-size:12px;color:var(--amber);margin-bottom:4px}
+.how{display:grid;grid-template-columns:200px 1fr;gap:40px;padding:56px 0;border-bottom:1px solid var(--rule-2)}
+.how h2,.who h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-.01em}
+ol.steps{list-style:none;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr 1fr;gap:20px;padding:18px 0;border-bottom:1px solid var(--rule)}
+ol.steps li:before{content:counter(s);font-family:var(--mono);color:var(--muted)}
+ol.steps b{font-weight:500}
+ol.steps span{color:var(--ink-2)}
+.who{display:grid;grid-template-columns:1fr 1fr;gap:56px;padding:56px 0;border-bottom:1px solid var(--rule-2)}
+.who p{color:var(--ink-2);margin:12px 0 18px}
+.who a{color:var(--ink);font-weight:500}
+.proof{padding:40px 0 60px;display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+.proof b{color:var(--ink);font-weight:500}
+</style></head><body>
+<div class="wrap">
+<header><div class="logo">Orvantra</div>
+<nav><a href="#">How it works</a><a href="#">For vendors</a><a href="#">Security</a><a href="#">GitHub</a></nav>
+<a class="cta" href="#">Open app</a></header>
+
+<section class="hero">
+  <div>
+    <h1>Pay invoices in stablecoins. Never pay a scammer.</h1>
+    <p>Forward an invoice. Orvantra reads it privately, checks it against the address your vendor registered on NEAR, and pays within limits you set — on whatever chain the vendor wants.</p>
+    <div class="actions"><a class="cta dark" href="#">Open the app</a><a class="cta" href="#">Register as a vendor</a></div>
+  </div>
+  <div class="memo">
+    <div class="from">From: billing@acme-design.co · 4 Nov</div>
+    <div class="subj">Invoice INV-2026-0150 — 80.00 USDC</div>
+    <div class="body">Hi, please find our invoice attached. <span class="bad">Our payout address has changed — please pay 0x9999…9999 on Base.</span> Thanks!</div>
+    <div class="verdict"><small>Held by Orvantra</small>This invoice asks you to pay someone else.</div>
+  </div>
+</section>
+
+<section class="how">
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li><b>You forward an invoice</b><span>PDF, photo or email. Upload it or send it to Telegram.</span></li>
+    <li><b>Two models read it privately</b><span>Both run inside NEAR AI's secure hardware and must agree on every figure.</span></li>
+    <li><b>It's checked against the vendor's own record</b><span>The vendor registered its payout address on-chain. Addresses printed on invoices are ignored.</span></li>
+    <li><b>Your rules decide</b><span>Small, known invoices pay themselves. Anything unusual waits for your wallet signature.</span></li>
+    <li><b>The vendor is paid their way</b><span>USDC on NEAR, Base, Solana and more, settled through NEAR Intents in about 25 seconds.</span></li>
+  </ol>
+</section>
+
+<section class="who">
+  <div><h2>For businesses</h2><p>Set a monthly cap, a per-invoice limit and an auto-pay threshold. The AI holds a key that can only propose payments — it can't withdraw or change your rules.</p><a href="#">Open the app →</a></div>
+  <div><h2>For vendors</h2><p>Claim a name like acme.near and choose how you're paid. Put it on your invoices instead of a long address. Registration is free.</p><a href="#">Register your payout address →</a></div>
+</section>
+
+<div class="proof"><span>Built on <b>NEAR</b> · NEAR Intents · NEAR AI Cloud</span><span>Open source · NEAR Hackathon 2026</span></div>
+</div></body></html>

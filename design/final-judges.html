@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — For judges</title>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f3ec;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule-2:#cfc8b8;--rule:#e2ddd1;
+--d-text:#efeae0;--d-2:#a9a396;--d-3:#7d786d;--d-rule:#36332d;--d-green:#9cc5ad;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--sans);-webkit-font-smoothing:antialiased}
+.page{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+.left{background:var(--paper);color:var(--ink);padding:30px 56px 34px;display:flex;flex-direction:column}
+.right{background:var(--ink);color:var(--d-text);padding:30px 56px 34px;display:flex;flex-direction:column}
+.logo{font-family:var(--serif);font-size:24px;height:36px}
+.back{font-size:13px;color:var(--muted);text-decoration:none}
+.left .mid,.right .mid{margin:auto 0}
+h1{font-family:var(--serif);font-weight:400;font-size:52px;line-height:1.05;letter-spacing:-.02em;max-width:500px}
+.lede{font-size:16.5px;color:var(--ink-2);max-width:450px;margin-top:18px;line-height:1.55}
+.links{margin-top:30px;border-top:1px solid var(--rule-2);max-width:440px}
+.links a{display:flex;justify-content:space-between;padding:15px 0;border-bottom:1px solid var(--rule-2);color:var(--ink);text-decoration:none;font-weight:500}
+.links a i{font-style:normal;font-family:var(--serif);font-size:20px}
+.top{display:flex;justify-content:flex-end;height:36px}
+.top a{color:var(--d-text);border:1px solid #5b574e;padding:7px 14px;font-size:14px;text-decoration:none}
+.lbl{font-size:12.5px;color:var(--d-2);margin-bottom:14px}
+ol{list-style:none;counter-reset:s;border-top:1px solid var(--d-rule);max-width:520px}
+li{counter-increment:s;display:grid;grid-template-columns:36px 1fr;padding:15px 0;border-bottom:1px solid var(--d-rule);font-size:15px}
+li:before{content:counter(s);font-family:var(--mono);font-size:13px;color:var(--d-3);padding-top:2px}
+li small{display:block;color:var(--d-green);font-family:var(--mono);font-size:12.5px;margin-top:4px}
+.m{font-family:var(--mono);font-size:13.5px}
+.foot{font-size:12.5px;color:var(--muted)}
+</style></head><body>
+<div class="page">
+  <section class="left">
+    <div class="logo">Orvantra</div>
+    <div class="mid">
+      <a class="back" href="#">← Home</a>
+      <h1 style="margin-top:14px">Try it in five steps.</h1>
+      <p class="lede">Everything runs on NEAR testnet against the deployed contracts. Each step says what to do and what you should see.</p>
+      <nav class="links">
+        <a href="#">Download the test invoices <i>↓</i></a>
+        <a href="#">README on GitHub <i>→</i></a>
+        <a href="#">Contracts on the explorer <i>→</i></a>
+      </nav>
+    </div>
+    <div class="foot">Network: testnet · Treasury: orvantra-treasury-v3.testnet</div>
+  </section>
+  <section class="right">
+    <div class="top"><a href="#">Open app</a></div>
+    <div class="mid">
+      <div class="lbl">Do this → see that</div>
+      <ol>
+        <li><span>Open the app and connect a testnet wallet<small>→ owner view; approving needs the treasury owner</small></span></li>
+        <li><span>Upload <span class="m">04-acme-changed-bank.png</span><small>→ held: "This invoice asks you to pay someone else"</small></span></li>
+        <li><span>Upload <span class="m">03-bob-small.png</span><small>→ paid automatically, direct to bob on NEAR</small></span></li>
+        <li><span>Upload the same invoice again<small>→ stopped as a duplicate, nothing sent</small></span></li>
+        <li><span>Run <span class="m">npm run prove-key-limits</span><small>→ 4 / 4 refused: the agent key can only propose</small></span></li>
+      </ol>
+    </div>
+    <div class="foot" style="color:var(--d-3)">Questions: see the README's judging section</div>
+  </section>
+</div></body></html>
