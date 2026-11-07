@@ -7,18 +7,36 @@ a "we changed our bank details, please pay 0xBAD" email can't redirect a payment
 
 - Every payout change bumps `version` and `updated_at_ns`. The agent uses `payout_age_ns` to hold
   payments to payout details that changed recently.
-- **Storage is paid by the contract**, so callers attach no deposit. That lets a relayer submit
-  vendor updates later (NEP-366 meta transactions keep the vendor as predecessor). The length limits
-  keep each entry to a few hundred bytes, and there is one entry per account. Keep some NEAR on the
-  contract account to cover storage.
+- **Storage is paid by the contract**, so callers attach only the 1 yoctoNEAR described below. That
+  lets a relayer submit vendor updates (NEP-366 meta transactions keep the vendor as predecessor).
+  The length limits keep each entry to a few hundred bytes, and there is one entry per account. Keep
+  some NEAR on the contract account to cover storage.
 - No init call is needed: the contract starts with an empty registry.
+
+## Security: payout changes need a full-access wallet confirmation
+
+`set_vendor` and `remove_vendor` are `#[payable]` and require **exactly 1 yoctoNEAR** attached
+(`assert_one_yocto`); 0 or 2+ yocto is rejected with
+`Requires attached deposit of exactly 1 yoctoNEAR`. The 1 yocto stays on the contract (no refund).
+
+Why: when a vendor signs in to a dapp, the wallet usually hands the browser a **function-call
+access key** limited to this contract. Such keys can call methods without a wallet prompt, but they
+**cannot attach any deposit**. Requiring 1 yocto therefore means every payout change must be signed
+with a full-access key, i.e. the vendor explicitly confirms it in their wallet. Malicious script on
+a page (or a leaked limited key) cannot silently redirect a vendor's payouts.
+
+This also applies to gasless updates: the NEP-366 delegate action must carry the 1 yocto itself,
+and it is signed by the vendor's full-access key; the relayer only pays gas.
+
+The state layout is unchanged from the previous version, so a code upgrade on the same account keeps
+all existing entries.
 
 ## Methods
 
 | Method | Kind | Description |
 |---|---|---|
-| `set_vendor(display_name, chain, asset_id, address)` | call | Create or update the **caller's** entry. A payout change (`chain`/`asset_id`/`address`) bumps `version` + `updated_at_ns` and emits `payout_updated`. A name-only change bumps neither and emits no event. Returns the `VendorView`. |
-| `remove_vendor()` | call | Delete the caller's own entry. Panics if the caller has no entry. Emits `vendor_removed`. |
+| `set_vendor(display_name, chain, asset_id, address)` | call, **1 yoctoNEAR** | Create or update the **caller's** entry. A payout change (`chain`/`asset_id`/`address`) bumps `version` + `updated_at_ns` and emits `payout_updated`. A name-only change bumps neither and emits no event. Returns the `VendorView`. |
+| `remove_vendor()` | call, **1 yoctoNEAR** | Delete the caller's own entry. Panics if the caller has no entry. Emits `vendor_removed`. |
 | `get_vendor(account_id)` | view | `VendorView` or `null`. |
 | `get_vendors(from_index?, limit?)` | view | Page of `VendorView`. `limit` defaults to and is capped at 100. Removing an entry moves the last entry into its slot, so pages can shift. |
 | `payout_age_ns(account_id)` | view | `now - updated_at_ns` as a string, or `null`. |
@@ -94,7 +112,7 @@ Assumes the wasm is built and you have testnet accounts `registry.orvantra.testn
    ```bash
    near contract call-function as-transaction registry.orvantra.testnet set_vendor \
      json-args '{"display_name":"Acme Ltd","chain":"base","asset_id":"nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near","address":"0x1111111111111111111111111111111111111111"}' \
-     prepaid-gas '30 Tgas' attached-deposit '0 NEAR' \
+     prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' \
      sign-as acme-demo.testnet network-config testnet sign-with-keychain send
    ```
    -> The logs show `EVENT_JSON:{"standard":"orvantra_registry",...,"event":"vendor_registered",...}`.
@@ -118,3 +136,15 @@ Assumes the wasm is built and you have testnet accounts `registry.orvantra.testn
 6. **Nobody else can edit Acme's entry**: run step 2 signed by another account (`sign-as other.testnet`).
    -> This creates or updates `other.testnet`'s own entry. `get_vendor` for `acme-demo.testnet` is
    unchanged.
+
+7. **A payout change needs the 1 yocto** (so a limited function-call key can't do it): repeat
+   step 2 with `attached-deposit '0 NEAR'` (or `'2 yoctoNEAR'`).
+   -> The transaction fails with `Requires attached deposit of exactly 1 yoctoNEAR`.
+
+8. **Vendor removes its entry**:
+   ```bash
+   near contract call-function as-transaction registry.orvantra.testnet remove_vendor \
+     json-args '{}' prepaid-gas '30 Tgas' attached-deposit '1 yoctoNEAR' \
+     sign-as acme-demo.testnet network-config testnet sign-with-keychain send
+   ```
+   -> The logs show `vendor_removed`; `get_vendor` returns `null`.

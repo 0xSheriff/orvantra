@@ -163,9 +163,10 @@ expect "view $TOKEN ft_balance_of {\"account_id\":\"$TREASURY\"}" "\"$FUND\" or 
 
 # ================================================================== 5. vendors + policy
 step "5. $NEAR_VENDOR publishes a NEAR-direct payout (tUSDC on NEAR) in the registry"
+# set_vendor requires exactly 1 yoctoNEAR (forces a full-access key, i.e. a real wallet confirmation).
 call "$NEAR_VENDOR" "$REGISTRY" set_vendor \
   "{\"display_name\":\"Bob Supplies\",\"chain\":\"near\",\"asset_id\":\"nep141:$TOKEN\",\"address\":\"$NEAR_VENDOR\"}" \
-  '0 NEAR'
+  '1 yoctoNEAR'
 view "$REGISTRY" get_vendor "{\"account_id\":\"$NEAR_VENDOR\"}"
 echo "   ($CROSS_VENDOR stays on chain \"base\": cross-chain path, needs a 1Click deposit address)"
 

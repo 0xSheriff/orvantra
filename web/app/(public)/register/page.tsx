@@ -33,7 +33,7 @@ export default async function Register() {
             fake &quot;our bank details changed&quot; email can&apos;t move your money.
           </p>
           <dl className="facts">
-            <div><dt>Almost free to register</dt><dd>One small network fee (well under 0.01 NEAR). Orvantra pays it for you when your wallet supports gasless signing.</dd></div>
+            <div><dt>Free with gasless wallets</dt><dd>Orvantra pays the network fee for you. Other wallets pay a tiny fee themselves — under 0.01 NEAR.</dd></div>
             <div><dt>Only you can change it</dt><dd>Changes are signed by your NEAR account. Payers are alerted before paying a new address.</dd></div>
             <div><dt>Put your name on invoices</dt><dd>Write <code className="m">acme.near</code> instead of a long address.</dd></div>
           </dl>

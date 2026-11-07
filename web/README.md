@@ -35,7 +35,8 @@ Two public pages sit outside the app (no sidebar), from `design/final-home-v2.ht
   Failed and then opens the settled record. **The server never signs owner actions.**
 - **Relay** (`POST /api/relay`, `lib/relay.ts` + `lib/server/relayer.ts`): decodes the borsh SignedDelegate and only
   sponsors it if the receiver is the registry, it is exactly one FunctionCall to `set_vendor` or `remove_vendor`, with
-  no deposit, at most 30 TGas, not past `max_block_height`, with a valid signature, and the sender has made fewer than
+  exactly 1 yoctoNEAR attached (the registry requires it; it comes from the vendor's balance, and because
+  function-call access keys cannot attach deposits the vendor must confirm with a full-access key), at most 30 TGas, not past `max_block_height`, with a valid signature, and the sender has made fewer than
   5 relayed changes in the last hour (in memory). The relayer then sends a transaction with a `SignedDelegate` action
   and waits for the final outcome. The registry checks `predecessor_account_id`, which stays the vendor, so the relayer
   can only ever touch the signer's own entry. Refused on mainnet unless `ORVANTRA_ALLOW_MAINNET_RELAY=1`.

@@ -9,9 +9,15 @@
 //! directly called the contract. With NEP-366 meta transactions the predecessor is still the vendor
 //! (the relayer only pays gas), so registration can be gasless for the vendor later on.
 //!
+//! # Full-access confirmation (1 yoctoNEAR)
+//! `set_vendor` and `remove_vendor` require EXACTLY 1 yoctoNEAR attached. Function-call access keys
+//! (the limited keys a browser dapp gets at sign-in) cannot attach deposits, so every payout change
+//! needs a full-access key, i.e. an explicit confirmation in the vendor's wallet. A leaked or misused
+//! limited key cannot silently redirect payments. The 1 yocto is kept (not refunded).
+//!
 //! # Storage
-//! The contract pays for storage from its own balance; callers attach no deposit. This is what lets
-//! a relayer submit vendor updates without the vendor holding NEAR. Abuse is bounded because:
+//! The contract pays for storage from its own balance; callers attach only the 1 yocto above. This
+//! lets a relayer submit vendor updates without the vendor holding NEAR. Abuse is bounded because:
 //! - there is at most one entry per NEAR account (creating accounts costs the attacker),
 //! - every string field has a hard length limit (see the `MAX_*` constants), so one entry is a few
 //!   hundred bytes at most (well under 0.01 NEAR of storage staking).
@@ -21,7 +27,7 @@
 use near_sdk::json_types::U64;
 use near_sdk::serde_json::{self, json};
 use near_sdk::store::IterableMap;
-use near_sdk::{env, near, require, AccountId, BorshStorageKey, Timestamp};
+use near_sdk::{assert_one_yocto, env, near, require, AccountId, BorshStorageKey, Timestamp};
 
 /// Max length of `display_name`, in characters.
 pub const MAX_DISPLAY_NAME_CHARS: usize = 64;
@@ -116,6 +122,8 @@ impl VendorRegistry {
     ///
     /// Changing `chain`, `asset_id` or `address` bumps `version` and `updated_at_ns` and emits
     /// `payout_updated`. Changing only `display_name` does neither.
+    /// Requires exactly 1 yoctoNEAR attached (forces a full-access key; see the module docs).
+    #[payable]
     pub fn set_vendor(
         &mut self,
         display_name: String,
@@ -123,6 +131,7 @@ impl VendorRegistry {
         asset_id: String,
         address: String,
     ) -> VendorView {
+        assert_one_yocto();
         let payout = Payout { chain, asset_id, address };
         if let Err(e) = validate(&display_name, &payout) {
             env::panic_str(&e);
@@ -181,7 +190,10 @@ impl VendorRegistry {
     }
 
     /// Delete the caller's own entry. Panics if the caller has no entry.
+    /// Requires exactly 1 yoctoNEAR attached (forces a full-access key; see the module docs).
+    #[payable]
     pub fn remove_vendor(&mut self) {
+        assert_one_yocto();
         let account_id = env::predecessor_account_id();
         let removed = self.vendors.remove(&account_id);
         require!(removed.is_some(), "vendor not registered");
