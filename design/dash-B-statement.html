@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Final · All invoices</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,400;6..72,500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --paper:#f6f3ec; --sheet:#fbf9f4; --white:#fffefb; --ink:#1b1a17; --ink-2:#4a4740; --muted:#8a857a;
+  --rule:#e2ddd1; --rule-2:#cfc8b8; --green:#1f4d3a; --amber:#8a5a12; --amber-soft:#f3e8d3; --red:#8c2f22; --red-soft:#f2dfd9;
+  --serif:'Newsreader',Georgia,serif; --sans:'IBM Plex Sans',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;-webkit-font-smoothing:antialiased}
+.app{display:grid;grid-template-columns:220px 1fr;min-height:100vh}
+nav{border-right:1px solid var(--rule);padding:28px 24px;display:flex;flex-direction:column;gap:28px;position:sticky;top:0;height:100vh}
+.brand{font-family:var(--serif);font-size:22px;letter-spacing:-.01em}
+.brand small{display:block;font-family:var(--sans);font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-top:2px}
+.navlist a{display:flex;justify-content:space-between;padding:7px 0;color:var(--ink-2);text-decoration:none;border-bottom:1px solid transparent}
+.navlist a.on{color:var(--ink);font-weight:500;border-bottom-color:var(--ink)}
+.navlist a span{font-family:var(--mono);font-size:12px;color:var(--muted)} .navlist a.on span{color:var(--amber)}
+.treasury{margin-top:auto;border-top:1px solid var(--rule);padding-top:18px;font-size:12px;color:var(--muted)}
+.treasury b{display:block;font-family:var(--serif);font-weight:400;font-size:26px;color:var(--ink);letter-spacing:-.01em;margin:4px 0 2px}
+.treasury .acct{font-family:var(--mono);font-size:11px}
+main{padding:22px 40px 32px}
+.crumbs{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--rule-2);padding-bottom:14px}
+.crumbs .c{font-size:13px;color:var(--muted)} .crumbs .c b{color:var(--ink);font-weight:500}
+.pager{display:flex;gap:16px;font-size:13px;color:var(--ink-2)}
+.pager a{color:inherit;text-decoration:none;border-bottom:1px solid var(--rule-2)}
+.stage{display:grid;grid-template-columns:1fr 390px;gap:36px;margin-top:20px;align-items:start}
+.paperwrap{display:flex;justify-content:center;padding:18px 0}
+.paper{position:relative;width:540px;background:var(--white);padding:48px 54px 54px;box-shadow:0 1px 0 rgba(0,0,0,.04),0 18px 40px -20px rgba(60,45,20,.25);font-size:13px}
+.paper h2{font-size:19px;letter-spacing:.05em;font-weight:600}
+.paper .sub{color:var(--muted);font-size:12px;margin-top:2px}
+.paper .meta{display:grid;grid-template-columns:auto 1fr;gap:4px 16px;margin:24px 0;font-size:12.5px}
+.paper .meta span:nth-child(odd){color:var(--muted)}
+.paper table{width:100%;border-collapse:collapse}
+.paper td{padding:9px 0;border-bottom:1px solid #efece5}
+.paper td:last-child{text-align:right;font-family:var(--mono)}
+.paper .tot td{border-bottom:0;font-weight:600;padding-top:14px;font-size:15px}
+.paper .pay{margin-top:26px;padding:12px 14px;background:#faf8f3;border:1px dashed var(--rule-2);font-size:12.5px}
+.mark{outline:2px solid var(--red);outline-offset:3px;border-radius:1px;justify-self:start}
+.mark.ok{outline-color:var(--green)}
+.pin{position:absolute;width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--sheet);font:600 11px var(--sans);display:grid;place-items:center;box-shadow:0 0 0 3px var(--paper)}
+.pin.r{background:var(--red)}
+.rail{display:flex;flex-direction:column;gap:0;border:1px solid var(--rule-2);background:var(--sheet)}
+.verdict{padding:22px 24px;border-bottom:1px solid var(--rule)}
+.lbl{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:500}
+.verdict .lbl{color:var(--amber)}
+.verdict h1{font-family:var(--serif);font-weight:400;font-size:31px;line-height:1.12;letter-spacing:-.015em;margin:8px 0 10px}
+.verdict p{color:var(--ink-2)}
+.f{display:grid;grid-template-columns:22px 1fr;gap:12px;padding:13px 24px;border-bottom:1px solid var(--rule)}
+.f .pin{position:static;box-shadow:none}
+.f b{font-weight:500;display:block}
+.f span{color:var(--ink-2);font-size:13px}
+.mono{font-family:var(--mono);font-size:12px}
+.strike{text-decoration:line-through;color:var(--red)}
+.payto{background:var(--ink);color:var(--sheet);padding:20px 24px}
+.payto .lbl{color:#a9a396}
+.payto .amt{font-family:var(--serif);font-size:40px;line-height:1.1;margin:6px 0;letter-spacing:-.02em}
+.payto .route{font-size:13px;color:#d8d3c7}
+.btns{display:flex;gap:10px;margin-top:18px}
+.btn{flex:1;font-family:var(--sans);font-size:14px;font-weight:500;padding:12px;border:0;cursor:pointer}
+.btn.y{background:var(--sheet);color:var(--ink)} .btn.n{background:transparent;color:var(--sheet);border:1px solid #5b574e}
+.btn:focus-visible{outline:2px solid #c9b98f;outline-offset:2px}
+.foot{font-size:12px;color:var(--muted);padding:12px 2px 0}
+</style>
+<style>
+main{padding:24px 40px 32px}
+.ph{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--rule-2);padding-bottom:16px}
+.ph h1{font-family:var(--serif);font-weight:400;font-size:34px;letter-spacing:-.015em}
+.ph p{color:var(--muted);font-size:13px}
+.upload{font-size:13px;color:var(--ink);border:1px solid var(--ink);padding:8px 14px;background:none;font-family:var(--sans)}
+.h2{font-size:12px;color:var(--muted);margin:0 0 10px}
+.mono{font-family:var(--mono)}
+.ok{color:var(--green)}.held{color:var(--amber)}.rej{color:var(--red)}
+</style><style>
+.statement{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--ink);border-bottom:1px solid var(--ink);margin-top:24px}
+.statement div{padding:18px 20px 18px 0}
+.statement div+div{padding-left:20px;border-left:1px solid var(--rule)}
+.statement span{font-size:12.5px;color:var(--muted)}
+.statement b{display:block;font-family:var(--serif);font-weight:400;font-size:34px;letter-spacing:-.015em;margin-top:2px}
+.statement small{font-size:12px;color:var(--ink-2)}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:44px;margin-top:30px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12px;color:var(--muted);font-weight:400;text-align:left;padding:8px 0;border-bottom:1px solid var(--rule-2)}
+td{padding:12px 0;border-bottom:1px solid var(--rule);font-size:13.5px;vertical-align:top}
+td.n{text-align:right;font-family:var(--mono)}th.r{text-align:right}
+td small{display:block;color:var(--muted);font-size:12px}
+.empty{padding:22px 0;border-bottom:1px solid var(--rule);color:var(--ink-2)}
+.empty b{font-family:var(--serif);font-weight:400;font-size:22px;display:block;color:var(--ink)}
+.guard{margin-top:28px}
+.guard .g{display:grid;grid-template-columns:1fr auto;padding:11px 0;border-bottom:1px solid var(--rule);font-size:13.5px}
+</style></head><body><div class="app"><nav>
+    <div class="brand">Orvantra<small>Accounts payable</small></div>
+    <div class="navlist">
+      <a class="on" href="#">Overview</a>
+      <a href="#">Needs approval <span>0</span></a>
+      <a href="#">All invoices <span>6</span></a>
+      <a href="#">Vendors <span>2</span></a>
+      <a href="#">Rules &amp; limits</a>
+      <a href="#">Activity</a>
+    </div>
+    <div class="treasury">Treasury balance<b>367.50 USDC</b><span class="acct">orvantra-treasury.near</span><br>Spent this month 132.50 of 1,000</div>
+  </nav>
+<main>
+<div class="ph"><div><h1>Overview</h1><p>Statement for November 2026 · orvantra-treasury · testnet</p></div><button class="upload">Upload invoice</button></div>
+<div class="statement">
+ <div><span>Opening balance</span><b>500.00</b><small>funded 6 Nov</small></div>
+ <div><span>Paid out</span><b>132.50</b><small>2 invoices</small></div>
+ <div><span>Stopped</span><b>80.00</b><small>1 invoice, rejected by you</small></div>
+ <div><span>Balance</span><b>367.50</b><small>USDC available</small></div>
+</div>
+<div class="cols">
+ <section>
+  <div class="h2">Needs you</div>
+  <div class="empty"><b>Nothing waiting.</b>New invoices that break a rule will appear here.</div>
+  <div class="guard"><div class="h2">What Orvantra blocked this month</div>
+   <div class="g"><span>Payment to an address the vendor never registered</span><span class="mono">1</span></div>
+   <div class="g"><span>Duplicate invoices</span><span class="mono">1</span></div>
+   <div class="g"><span>Unknown vendors</span><span class="mono">1</span></div>
+   <div class="g"><span>Agent key attempts outside its permission</span><span class="mono">0</span></div>
+  </div>
+ </section>
+ <section>
+  <table><thead><tr><th>Recent payments</th><th>Route</th><th class="r">Amount</th></tr></thead><tbody>
+   <tr><td>Bob's Bakery Supplies<small>B-0008 · approved 03:11</small></td><td>USDC on NEAR</td><td class="n ok">12.50</td></tr>
+   <tr><td>Acme Design Studio<small>INV-2026-0142 · approved 03:09</small></td><td>USDC on Base</td><td class="n ok">120.00</td></tr>
+   <tr><td>Acme Design Studio<small>INV-2026-0150 · rejected 03:10</small></td><td>—</td><td class="n rej">80.00</td></tr>
+  </tbody></table>
+  <table style="margin-top:28px"><thead><tr><th>Vendors</th><th>This month</th><th class="r">Cap</th></tr></thead><tbody>
+   <tr><td>Acme Design Studio<small>USDC on Base · payout v2</small></td><td class="mono">120.00</td><td class="n">600.00</td></tr>
+   <tr><td>Bob's Bakery Supplies<small>USDC on NEAR · payout v2</small></td><td class="mono">12.50</td><td class="n">200.00</td></tr>
+  </tbody></table>
+ </section>
+</div>
+</main></div></body></html>

@@ -1,0 +1,135 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Orvantra — Home (final mix)</title><link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f6f3ec;--sheet:#fbf9f4;--white:#fffefb;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule:#e2ddd1;--rule-2:#cfc8b8;--green:#1f4d3a;--amber:#8a5a12;--red:#8c2f22;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.wrap{max-width:1180px;margin:0 auto;padding:0 40px}
+header{display:flex;align-items:center;justify-content:space-between;padding:26px 0;border-bottom:1px solid var(--rule-2)}
+.logo{font-family:var(--serif);font-size:24px;letter-spacing:-.01em}
+header nav{display:flex;gap:28px;font-size:14px;color:var(--ink-2)}
+header nav a{color:inherit;text-decoration:none}
+.cta{font-size:14px;border:1px solid var(--ink);padding:9px 16px;color:var(--ink);text-decoration:none}
+.cta.dark{background:var(--ink);color:var(--sheet)}
+.hero{display:grid;grid-template-columns:1.1fr .9fr;gap:56px;padding:72px 0 64px;border-bottom:1px solid var(--rule-2);align-items:end}
+.hero h1{font-family:var(--serif);font-weight:400;font-size:68px;line-height:1.02;letter-spacing:-.025em}
+.hero p{font-size:18px;color:var(--ink-2);max-width:470px;margin-top:22px}
+.hero .actions{display:flex;gap:12px;margin-top:30px}
+.memo{background:var(--white);padding:26px 28px;box-shadow:0 18px 40px -22px rgba(60,45,20,.3);font-size:13px}
+.memo .from{color:var(--muted);font-size:12px}
+.memo .subj{font-weight:600;margin:4px 0 12px}
+.memo .body{color:var(--ink-2)}
+.memo .bad{outline:2px solid var(--red);outline-offset:3px}
+.memo .verdict{margin-top:18px;padding-top:14px;border-top:1px solid var(--rule);font-family:var(--serif);font-size:20px;line-height:1.2}
+.memo .verdict small{display:block;font-family:var(--sans);font-size:12px;color:var(--amber);margin-bottom:4px}
+.how{display:grid;grid-template-columns:200px 1fr;gap:40px;padding:56px 0;border-bottom:1px solid var(--rule-2)}
+.how h2,.who h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-.01em}
+ol.steps{list-style:none;counter-reset:s}
+ol.steps li{counter-increment:s;display:grid;grid-template-columns:44px 1fr 1fr;gap:20px;padding:18px 0;border-bottom:1px solid var(--rule)}
+ol.steps li:before{content:counter(s);font-family:var(--mono);color:var(--muted)}
+ol.steps b{font-weight:500}
+ol.steps span{color:var(--ink-2)}
+.who{display:grid;grid-template-columns:1fr 1fr;gap:56px;padding:56px 0;border-bottom:1px solid var(--rule-2)}
+.who p{color:var(--ink-2);margin:12px 0 18px}
+.who a{color:var(--ink);font-weight:500}
+.proof{padding:40px 0 60px;display:flex;justify-content:space-between;color:var(--muted);font-size:13px}
+.proof b{color:var(--ink);font-weight:500}
+
+:root{--paper:#f6f3ec;--sheet:#fbf9f4;--white:#fffefb;--ink:#1b1a17;--ink-2:#4a4740;--muted:#8a857a;--rule:#e2ddd1;--rule-2:#cfc8b8;--green:#1f4d3a;--amber:#8a5a12;--red:#8c2f22;
+--serif:'Newsreader',Georgia,serif;--sans:'IBM Plex Sans',system-ui,sans-serif;--mono:'IBM Plex Mono',monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+.page{display:grid;grid-template-columns:1fr 1fr;min-height:100vh}
+.left{padding:34px 56px;display:flex;flex-direction:column}
+.logo{font-family:var(--serif);font-size:24px}
+.left .mid{margin:auto 0}
+h1{font-family:var(--serif);font-weight:400;font-size:58px;line-height:1.04;letter-spacing:-.022em;max-width:540px}
+.lede{font-size:17px;color:var(--ink-2);max-width:480px;margin-top:20px}
+.choose{margin-top:36px;border-top:1px solid var(--rule-2);max-width:500px}
+.choose a{display:grid;grid-template-columns:1fr auto;padding:18px 0;border-bottom:1px solid var(--rule-2);color:var(--ink);text-decoration:none}
+.choose a b{font-weight:500;font-size:16px}
+.choose a span{color:var(--muted);font-size:13px;grid-column:1}
+.choose a i{grid-row:1/3;grid-column:2;align-self:center;font-style:normal;font-family:var(--serif);font-size:22px}
+.foot{font-size:12.5px;color:var(--muted)}
+.right{background:var(--ink);color:var(--sheet);padding:34px 48px;display:flex;flex-direction:column;justify-content:center;gap:0}
+.right .lbl{font-size:12px;color:#a9a396;margin-bottom:14px}
+.log{border-top:1px solid #36332d}
+.e{display:grid;grid-template-columns:78px 1fr auto;gap:14px;padding:15px 0;border-bottom:1px solid #36332d;font-size:13.5px}
+.e time{font-family:var(--mono);font-size:12px;color:#8f8a7e}
+.e .a{font-family:var(--mono)}
+.e small{display:block;color:#a9a396;font-size:12px;margin-top:2px}
+.e .s{font-size:12px;text-align:right}
+.ok{color:#9cc5ad}.hold{color:#e0b46a}.stop{color:#e39a8c}
+.note{margin-top:20px;font-size:12.5px;color:#a9a396;max-width:460px}
+.note a{color:var(--sheet)}
+
+.split{display:grid;grid-template-columns:1.05fr .95fr;border-bottom:1px solid var(--rule-2);min-height:600px}
+.split .left{padding:56px 48px 48px 0}
+.split .right{padding:40px 44px}
+.split h1{font-size:60px}
+.how{grid-template-columns:200px 1fr}
+.judge{display:grid;grid-template-columns:200px 1fr;gap:40px;padding:56px 0;border-bottom:1px solid var(--rule-2)}
+.judge h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-.01em}
+.judge .intro{color:var(--ink-2);max-width:620px;margin-bottom:10px}
+.jsteps{list-style:none;counter-reset:j;border-top:1px solid var(--rule-2)}
+.jsteps li{counter-increment:j;display:grid;grid-template-columns:44px 1fr 1.1fr;gap:20px;padding:16px 0;border-bottom:1px solid var(--rule)}
+.jsteps li:before{content:counter(j);font-family:var(--mono);color:var(--muted)}
+.jsteps b{font-weight:500}.jsteps span{color:var(--ink-2)}
+.jsteps .see{font-family:var(--mono);font-size:12.5px;color:var(--green)}
+.judge .links{margin-top:18px;display:flex;gap:12px}
+
+body{min-height:auto} .page{display:block;min-height:0}
+</style></head><body><div class="wrap">
+<header><div class="logo">Orvantra</div>
+<nav><a href="#how">How it works</a><a href="#">For vendors</a><a href="#judges">For judges</a><a href="#">GitHub</a></nav>
+<a class="cta" href="#">Open app</a></header>
+<section class="split"><div class="left"><div>
+      <h1>The accounts-payable clerk that can't be tricked.</h1>
+      <p class="lede">An AI that reads your invoices privately and pays vendors in stablecoins on any chain — but only to the address the vendor registered on NEAR, and only within your limits.</p>
+      <nav class="choose">
+        <a href="#"><b>I pay invoices</b><span>Open your treasury, set rules, approve what's held</span><i>→</i></a>
+        <a href="#"><b>I send invoices</b><span>Register how you want to be paid — free, no NEAR needed</span><i>→</i></a>
+        <a href="#judges"><b>I'm a judge</b><span>Try it on testnet in five steps</span><i>→</i></a>
+      </nav>
+    </div>
+    </div><section class="right">
+    <div class="lbl">Live on testnet · orvantra-treasury-v3</div>
+    <div class="log">
+      <div class="e"><time>03:11</time><div>Bob's Bakery Supplies <small>B-0008 · approved by owner</small></div><div><span class="a">12.50</span><div class="s ok">Paid</div></div></div>
+      <div class="e"><time>03:10</time><div>Acme Design Studio <small>INV-2026-0150 · asked to pay a different address</small></div><div><span class="a">80.00</span><div class="s stop">Rejected</div></div></div>
+      <div class="e"><time>03:09</time><div>Acme Design Studio <small>INV-2026-0142 · above 100 limit, approved</small></div><div><span class="a">120.00</span><div class="s ok">Paid</div></div></div>
+      <div class="e"><time>22:31</time><div>Agent proposed 3 payments <small>read by two private models, both TEE-signed</small></div><div><div class="s hold">Held</div></div></div>
+    </div>
+    <p class="note">Every row is a real on-chain record. <a href="#">See it on the explorer →</a></p>
+  </section></section>
+<section class="how" id="how">
+  <h2>How it works</h2>
+  <ol class="steps">
+    <li><b>You forward an invoice</b><span>PDF, photo or email. Upload it or send it to Telegram.</span></li>
+    <li><b>Two models read it privately</b><span>Both run inside NEAR AI's secure hardware and must agree on every figure.</span></li>
+    <li><b>It's checked against the vendor's own record</b><span>The vendor registered its payout address on-chain. Addresses printed on invoices are ignored.</span></li>
+    <li><b>Your rules decide</b><span>Small, known invoices pay themselves. Anything unusual waits for your wallet signature.</span></li>
+    <li><b>The vendor is paid their way</b><span>USDC on NEAR, Base, Solana and more, settled through NEAR Intents in about 25 seconds.</span></li>
+  </ol>
+</section>
+<section class="judge" id="judges">
+  <h2>For judges</h2>
+  <div>
+    <p class="intro">Everything below runs on NEAR testnet against the deployed contracts. Each step says what to do and what you should see.</p>
+    <ol class="jsteps">
+      <li><b>Open the app and connect a testnet wallet</b><span class="see">→ the owner view; approvals are disabled unless you own the treasury</span></li>
+      <li><b>Upload <span class="mono">04-acme-changed-bank.png</span></b><span class="see">→ held: "This invoice asks you to pay someone else"</span></li>
+      <li><b>Upload <span class="mono">03-bob-small.png</span></b><span class="see">→ paid automatically, direct to bob on NEAR</span></li>
+      <li><b>Upload the same invoice again</b><span class="see">→ stopped: duplicate invoice, nothing sent</span></li>
+      <li><b>Run <span class="mono">npm run prove-key-limits</span></b><span class="see">→ 4/4 refused: the agent key can only propose</span></li>
+    </ol>
+    <div class="links"><a class="cta dark" href="#">Download test invoices</a><a class="cta" href="#">README on GitHub</a><a class="cta" href="#">Contracts on explorer</a></div>
+  </div>
+</section>
+<section class="who">
+  <div><h2>For businesses</h2><p>Set a monthly cap, a per-invoice limit and an auto-pay threshold. The AI holds a key that can only propose payments — it can't withdraw or change your rules.</p><a href="#">Open the app →</a></div>
+  <div><h2>For vendors</h2><p>Claim a name like acme.near and choose how you're paid. Put it on your invoices instead of a long address. Registration is free.</p><a href="#">Register your payout address →</a></div>
+</section>
+<div class="proof"><span>Built on <b>NEAR</b> · NEAR Intents · NEAR AI Cloud</span><span>Open source · NEAR Hackathon 2026</span></div>
+</div></body></html>
