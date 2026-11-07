@@ -44,7 +44,7 @@ export default async function NeedsApproval({ searchParams }: { searchParams: Pr
         <>
           <span>{idx + 1} of {pending.length}</span>
           {next ? (
-            <Link href={`/?p=${next.payment?.id}`}>
+            <Link href={`/review?p=${next.payment?.id}`}>
               Next: {next.vendorName.split(' ')[0]} · {fmtAmount(next.amount)}
             </Link>
           ) : null}

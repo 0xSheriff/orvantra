@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 const base = process.argv[2] ?? 'http://localhost:3100';
 const out = resolve(import.meta.dirname, '../../design');
 const pages = [
-  ['review', '/'],
+  ['review', '/review'],
   ['list', '/invoices'],
   ['vendors', '/vendors'],
   ['rules', '/rules'],

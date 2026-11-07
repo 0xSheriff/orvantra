@@ -9,7 +9,7 @@ export async function Sidebar() {
   const unit = d.ctx.unit;
   return (
     <aside className="side" aria-label="Orvantra">
-      <Link className="brand" href="/">Orvantra<small>Accounts payable</small></Link>
+      <Link className="brand" href="/review">Orvantra<small>Accounts payable</small></Link>
       <NavList counts={{ approval: d.pending.length, invoices: d.counts.all, vendors: d.vendors.filter((v) => v.policy).length }} />
       <div className="sidefoot">
         <WalletStatus owner={d.config?.owner ?? null} />

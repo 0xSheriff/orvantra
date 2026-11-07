@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import dotenv from 'dotenv';
 import { nearConfig, type NearConfig } from 'orvantra-agent/near';
+import { siteLinks, type SiteLinks } from '../links';
 
 export const REPO_ROOT = process.env.ORVANTRA_ROOT ?? resolve(process.cwd(), '..');
 export const AGENT_DIR = resolve(REPO_ROOT, 'agent');
@@ -74,4 +75,9 @@ export interface PublicConfig {
 export function publicConfig(): PublicConfig {
   const c = serverConfig();
   return { network: c.network, treasuryId: c.treasuryId, registryId: c.registryId };
+}
+
+/** Links for the public pages (read at request time, after the repo-root .env is loaded). */
+export function publicLinks(): SiteLinks {
+  return siteLinks(process.env, serverConfig());
 }
