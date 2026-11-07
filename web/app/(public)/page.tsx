@@ -49,7 +49,7 @@ export default async function Home() {
             </Link>
             <a href={links.vendorUrl}>
               <b>I send invoices</b>
-              <span>Register how you want to be paid — free</span>
+              <span>Register how you want to be paid</span>
               <i className="ar" aria-hidden="true">→</i>
             </a>
             <Link href="/judges">
