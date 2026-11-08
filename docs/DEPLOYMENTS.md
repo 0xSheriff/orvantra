@@ -57,7 +57,7 @@ Verified: 0-deposit call rejected ("Requires attached deposit of exactly 1 yocto
 tx H2rFYdn6V6qT2cb3YQcm8ThnwRWugqk4An8p1yoJCSU8 (relayer paid gas and the 1 yocto).
 
 ## Hosting (2026-11-08)
-Permanent demo: https://web-production-f1e29.up.railway.app (Railway project `orvantra`, service `web`, volume at
+Permanent demo: https://orvantra.up.railway.app (Railway project `orvantra`, service `web`, volume at
 /app/agent/data). One container runs the Next.js app + Telegram notifier (`Dockerfile`, `deploy/entrypoint.sh`).
 Secrets on Railway: NEAR AI key (capped), Telegram bot token/chat id, agent function-call key (propose_payment only,
 treasury v3), relayer key (testnet, registry-only relay policy). NOT on Railway: Fortytwo key, 1Click JWT, any owner
