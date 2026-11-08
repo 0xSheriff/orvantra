@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+**/node_modules
+**/.next
+target
+agent/data
+design
+docs
+scripts
+contracts/**/target
+.claude
+*.log
