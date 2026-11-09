@@ -1,5 +1,16 @@
 {
   "permissions": {
-    "deny": ["Read(./.env)", "Read(./.env.*)", "Bash(cat .env*)", "Bash(git push:*)", "Bash(near:*)"]
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Bash(cat .env*)",
+      "Bash(git push:*)",
+      "Bash(near:*)"
+    ]
+  },
+  "enabledPlugins": {
+    "claude-security@claude-plugins-official": true,
+    "security-guidance@claude-plugins-official": true,
+    "frontend-design@claude-plugins-official": true
   }
 }
