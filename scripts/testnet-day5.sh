@@ -17,8 +17,11 @@ set -euo pipefail
 NETWORK=testnet
 OWNER=orvantra-owner.testnet             # the human; owns the tUSDC supply, approves held payments
 AGENT=orvantra-agent.testnet             # the agent account; it will sign ONLY with a function-call key
-TREASURY=orvantra-treasury-v2.testnet    # NEW treasury (fresh state; Day 5 contract)
-SIM=orvantra-1click-sim.testnet          # stand-in for the 1Click deposit address (testnet has no NEAR Intents)
+# Treasury with the 2026-11-08 security fixes (new state layout): deploy to a FRESH account.
+TREASURY=${TREASURY:-orvantra-treasury-v4.testnet}
+# Stand-in for the 1Click deposit address (testnet has no NEAR Intents). The treasury only pays cross-chain to a
+# 64-hex implicit account, like real 1Click deposit addresses; this one is sha256("orvantra-1click-sim").
+SIM=${SIM:-$(python3 -c "import hashlib; print(hashlib.sha256(b'orvantra-1click-sim').hexdigest())")}
 TOKEN=orvantra-tusdc.testnet             # test token (tUSDC, 6 decimals)
 REGISTRY=orvantra-registry.testnet       # vendor registry
 ACME=orvantra-acme.testnet               # payout: USDC on Base  -> cross-chain path (simulated on testnet)
@@ -76,7 +79,7 @@ pay() { # pay FIXTURE -> runs the agent with --execute, full output to $LOG, pri
 
 # ================================================================== 1. accounts
 step "1. Accounts"
-for a in "$TREASURY" "$SIM"; do ensure_account "$a"; done
+ensure_account "$TREASURY"   # (SIM is an implicit account id: it needs no creation to hold tUSDC)
 for a in "$OWNER" "$AGENT" "$TOKEN" "$REGISTRY" "$ACME" "$BOB"; do
   exists "$a" || { echo "   missing $a (create it first, see docs/DEPLOYMENTS.md)"; exit 1; }
 done
@@ -88,12 +91,12 @@ if view "$TREASURY" get_config '{}' >/dev/null; then
   echo "   already deployed+initialised (skip)"
 else
   near contract deploy "$TREASURY" use-file "$TREASURY_WASM" \
-    with-init-call new json-args "{\"owner\":\"$OWNER\",\"agent\":\"$AGENT\",\"registry\":\"$REGISTRY\",\"token\":\"$TOKEN\",\"auto_pay_threshold\":\"$AUTO_PAY_THRESHOLD\",\"monthly_cap\":\"$MONTHLY_CAP\",\"min_payout_age_sec\":$MIN_PAYOUT_AGE_SEC,\"storage_deposit\":\"$STORAGE_DEPOSIT_YOCTO\"}" \
+    with-init-call new json-args "{\"owner\":\"$OWNER\",\"agent\":\"$AGENT\",\"registry\":\"$REGISTRY\",\"token\":\"$TOKEN\",\"auto_pay_threshold\":\"$AUTO_PAY_THRESHOLD\",\"monthly_cap\":\"$MONTHLY_CAP\",\"min_payout_age_sec\":$MIN_PAYOUT_AGE_SEC,\"storage_deposit\":\"$STORAGE_DEPOSIT_YOCTO\",\"cross_chain_auto_pay_threshold\":\"0\",\"max_open_payments\":25,\"near_reserve\":\"500000000000000000000000\"}" \
     prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
     network-config "$NETWORK" sign-with-legacy-keychain send
 fi
 view "$TREASURY" get_config '{}'
-expect "view $TREASURY get_config" "owner=$OWNER agent=$AGENT storage_deposit=\"$STORAGE_DEPOSIT_YOCTO\" payment_count=0"
+expect "view $TREASURY get_config" "owner=$OWNER agent=$AGENT storage_deposit=\"$STORAGE_DEPOSIT_YOCTO\" payment_count=0 cross_chain_auto_pay_threshold=\"0\" max_open_payments=25 available_near > near_reserve (0.5 NEAR)"
 
 # ================================================================== 3. token registration + funding
 step "3. Register $TREASURY (+ $SIM) on $TOKEN, fund the treasury with 500 tUSDC"
@@ -163,7 +166,7 @@ expect "npm run pay -- fixtures/03-bob-small.png --execute" "path: DIRECT; Resul
 step "7b. 01-acme-normal.png: 120 tUSDC to Acme (USDC on Base) -> SIMULATED 1Click, held by the CONTRACT"
 pay 01-acme-normal.png
 expect "npm run pay -- fixtures/01-acme-normal.png --execute" \
-  "dry mainnet quote signature VALID; !! SIMULATED banner; PENDING: 'amount above auto-pay threshold', 'first payment to this vendor'"
+  "dry mainnet quote signature VALID; !! SIMULATED banner; PENDING: 'amount above auto-pay threshold', 'first payment to this vendor', 'cross-chain payout: owner confirms the 1Click deposit address'"
 
 step "7c. 04-acme-changed-bank.png: invoice says 'pay 0x9999…' -> ignored; agent flags it, contract holds it"
 pay 04-acme-changed-bank.png

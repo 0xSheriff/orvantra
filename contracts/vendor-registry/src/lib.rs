@@ -9,25 +9,28 @@
 //! directly called the contract. With NEP-366 meta transactions the predecessor is still the vendor
 //! (the relayer only pays gas), so registration can be gasless for the vendor later on.
 //!
-//! # Full-access confirmation (1 yoctoNEAR)
-//! `set_vendor` and `remove_vendor` require EXACTLY 1 yoctoNEAR attached. Function-call access keys
-//! (the limited keys a browser dapp gets at sign-in) cannot attach deposits, so every payout change
-//! needs a full-access key, i.e. an explicit confirmation in the vendor's wallet. A leaked or misused
-//! limited key cannot silently redirect payments. The 1 yocto is kept (not refunded).
+//! # Full-access confirmation (attached deposit)
+//! `set_vendor` needs an attached deposit (>= 1 yoctoNEAR, see Storage) and `remove_vendor` exactly
+//! 1 yoctoNEAR. Function-call access keys (the limited keys a browser dapp gets at sign-in) cannot
+//! attach deposits, so every payout change needs a full-access key, i.e. an explicit confirmation
+//! in the vendor's wallet. A leaked or misused limited key cannot silently redirect payments.
 //!
-//! # Storage
-//! The contract pays for storage from its own balance; callers attach only the 1 yocto above. This
-//! lets a relayer submit vendor updates without the vendor holding NEAR. Abuse is bounded because:
-//! - there is at most one entry per NEAR account (creating accounts costs the attacker),
-//! - every string field has a hard length limit (see the `MAX_*` constants), so one entry is a few
-//!   hundred bytes at most (well under 0.01 NEAR of storage staking).
-//!
-//! The contract owner must keep enough NEAR on the contract account to cover storage.
+//! # Storage (paid by the vendor)
+//! Each vendor pays for its own entry, measured as the change in `env::storage_usage()`:
+//! - creating an entry needs a deposit >= its storage cost; the excess is refunded;
+//! - an update needs >= 1 yoctoNEAR plus the cost of any growth; the 1 yocto is kept, the excess
+//!   refunded; if the entry shrinks, the freed part of what the vendor paid is refunded;
+//! - `remove_vendor` refunds what the vendor paid for the entry. A small record per account stays
+//!   (paid at creation): it keeps `version` monotonic if the vendor registers again.
+//! So nobody can make the contract pay for storage. Entries from before this rule (migrated by
+//! `migrate`) have `paid_storage = 0`: they stay removable, and removing them refunds nothing.
 
-use near_sdk::json_types::U64;
+use near_sdk::json_types::{U128, U64};
 use near_sdk::serde_json::{self, json};
-use near_sdk::store::IterableMap;
-use near_sdk::{assert_one_yocto, env, near, require, AccountId, BorshStorageKey, Timestamp};
+use near_sdk::store::{IterableMap, LookupMap};
+use near_sdk::{
+    assert_one_yocto, env, near, require, AccountId, BorshStorageKey, NearToken, Promise, Timestamp,
+};
 
 /// Max length of `display_name`, in characters.
 pub const MAX_DISPLAY_NAME_CHARS: usize = 64;
@@ -99,30 +102,82 @@ impl VendorView {
     }
 }
 
+/// Per-account bookkeeping, kept after `remove_vendor` (tombstone).
+#[near(serializers = [borsh])]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct VendorAccount {
+    /// yoctoNEAR the vendor has paid for storage and not had refunded.
+    pub paid_storage: u128,
+    /// `version` of the entry when it was last removed (0 = never removed). Re-registering
+    /// continues at `last_version + 1`, so a version number never means two different payouts.
+    pub last_version: u32,
+}
+
 #[near]
 #[derive(BorshStorageKey)]
 enum StorageKey {
     Vendors,
+    Accounts,
 }
 
 #[near(contract_state)]
 pub struct VendorRegistry {
     vendors: IterableMap<AccountId, Vendor>,
+    accounts: LookupMap<AccountId, VendorAccount>,
 }
 
 impl Default for VendorRegistry {
     fn default() -> Self {
-        Self { vendors: IterableMap::new(StorageKey::Vendors) }
+        Self {
+            vendors: IterableMap::new(StorageKey::Vendors),
+            accounts: LookupMap::new(StorageKey::Accounts),
+        }
     }
+}
+
+/// The state layout before vendors paid for storage (only the vendors map). Read by `migrate`.
+#[near(serializers = [borsh])]
+pub struct RegistryV1 {
+    pub vendors: IterableMap<AccountId, Vendor>,
+}
+
+pub const ERR_NO_DEPOSIT: &str =
+    "Requires attached deposit of at least 1 yoctoNEAR (plus storage, see storage_cost_estimate)";
+
+/// Storage bytes of a new entry (vendor entry + per-account record):
+/// `ENTRY_BASE_BYTES + 2 x account id + the payout/name strings`. The base covers borsh length
+/// prefixes, timestamps, version, index and the runtime's 40-byte overhead per storage record.
+/// Measured with `env::storage_usage()` in the unit tests.
+pub const ENTRY_BASE_BYTES: u64 = 227;
+/// Storage bytes of the per-account record alone: `TOMBSTONE_BASE_BYTES + account id`.
+pub const TOMBSTONE_BASE_BYTES: u64 = 65;
+/// Longest NEAR account id and longest supported chain name, used by `storage_cost_estimate`.
+pub const MAX_ACCOUNT_ID_LEN: u64 = 64;
+pub const MAX_CHAIN_LEN: u64 = 9;
+
+pub fn entry_storage_bytes(account_len: u64, name_len: u64, chain_len: u64, asset_len: u64, address_len: u64) -> u64 {
+    ENTRY_BASE_BYTES + 2 * account_len + name_len + chain_len + asset_len + address_len
 }
 
 #[near]
 impl VendorRegistry {
+    /// One-time upgrade from the `RegistryV1` layout: keeps every entry (and its version) and adds
+    /// the per-account records (`paid_storage = 0` for existing entries). Fails if the state is
+    /// already in the new layout. Call it in the same transaction as the code deploy.
+    #[private]
+    #[init(ignore_state)]
+    pub fn migrate() -> Self {
+        let old: RegistryV1 =
+            env::state_read().unwrap_or_else(|| env::panic_str("no registry state to migrate"));
+        Self { vendors: old.vendors, accounts: LookupMap::new(StorageKey::Accounts) }
+    }
+
     /// Create or update the caller's own entry.
     ///
     /// Changing `chain`, `asset_id` or `address` bumps `version` and `updated_at_ns` and emits
     /// `payout_updated`. Changing only `display_name` does neither.
-    /// Requires exactly 1 yoctoNEAR attached (forces a full-access key; see the module docs).
+    /// Deposit: creating needs >= the entry's storage cost (see `storage_cost_estimate`), updating
+    /// needs >= 1 yoctoNEAR plus any storage growth. The excess is refunded (see the module docs).
     #[payable]
     pub fn set_vendor(
         &mut self,
@@ -131,7 +186,8 @@ impl VendorRegistry {
         asset_id: String,
         address: String,
     ) -> VendorView {
-        assert_one_yocto();
+        let deposit = env::attached_deposit().as_yoctonear();
+        require!(deposit >= 1, ERR_NO_DEPOSIT);
         let payout = Payout { chain, asset_id, address };
         if let Err(e) = validate(&display_name, &payout) {
             env::panic_str(&e);
@@ -139,15 +195,25 @@ impl VendorRegistry {
 
         let account_id = env::predecessor_account_id();
         let now = env::block_timestamp();
+        let before = self.storage_used();
+        let created = !self.vendors.contains_key(&account_id);
 
-        match self.vendors.get_mut(&account_id) {
+        let view = match self.vendors.get_mut(&account_id) {
             None => {
+                let version = match self.accounts.get(&account_id) {
+                    Some(a) => a.last_version + 1,
+                    None => {
+                        let record = VendorAccount { paid_storage: 0, last_version: 0 };
+                        self.accounts.insert(account_id.clone(), record);
+                        1
+                    }
+                };
                 let vendor = Vendor {
                     display_name,
                     payout,
                     created_at_ns: now,
                     updated_at_ns: now,
-                    version: 1,
+                    version,
                 };
                 emit(
                     "vendor_registered",
@@ -161,7 +227,7 @@ impl VendorRegistry {
                     }),
                 );
                 let view = VendorView::new(account_id.clone(), &vendor);
-                self.vendors.insert(account_id, vendor);
+                self.vendors.insert(account_id.clone(), vendor);
                 view
             }
             Some(vendor) => {
@@ -184,20 +250,88 @@ impl VendorRegistry {
                         }),
                     );
                 }
-                VendorView::new(account_id, vendor)
+                VendorView::new(account_id.clone(), vendor)
             }
+        };
+
+        // Entries from before vendors paid for storage have no record yet; if such an entry
+        // grows, start one so the vendor's payment is tracked (and refundable).
+        let mut after = self.storage_used();
+        if after > before && !self.accounts.contains_key(&account_id) {
+            let record = VendorAccount { paid_storage: 0, last_version: 0 };
+            self.accounts.insert(account_id.clone(), record);
+            after = self.storage_used();
         }
+
+        let byte_cost = env::storage_byte_cost().as_yoctonear();
+        let refund = if after >= before {
+            let charge = u128::from(after - before) * byte_cost;
+            // Creating: pay the storage. Updating: 1 yocto (kept) + any growth.
+            let required = if created { charge } else { charge + 1 };
+            if deposit < required {
+                env::panic_str(&format!(
+                    "attached deposit too small: this needs {required} yoctoNEAR ({} bytes of storage), got {deposit}",
+                    after - before
+                ));
+            }
+            if charge > 0 {
+                self.change_paid(&account_id, |paid| paid + charge);
+            }
+            deposit - required
+        } else {
+            // Shrunk: give back the freed part of what this vendor paid.
+            let freed = u128::from(before - after) * byte_cost;
+            let back = self.release_paid(&account_id, freed);
+            deposit - 1 + back
+        };
+        refund_to(&account_id, refund);
+        view
     }
 
-    /// Delete the caller's own entry. Panics if the caller has no entry.
-    /// Requires exactly 1 yoctoNEAR attached (forces a full-access key; see the module docs).
+    /// Delete the caller's own entry and refund the storage the vendor paid for it. A small
+    /// per-account record stays so a later re-registration continues the version numbering.
+    /// Panics if the caller has no entry. Requires exactly 1 yoctoNEAR attached (full-access key).
     #[payable]
     pub fn remove_vendor(&mut self) {
         assert_one_yocto();
         let account_id = env::predecessor_account_id();
+        let before = self.storage_used();
         let removed = self.vendors.remove(&account_id);
-        require!(removed.is_some(), "vendor not registered");
-        emit("vendor_removed", json!({ "account_id": account_id }));
+        let Some(removed) = removed else { env::panic_str("vendor not registered") };
+        let mut record = self
+            .accounts
+            .get(&account_id)
+            .cloned()
+            .unwrap_or(VendorAccount { paid_storage: 0, last_version: 0 });
+        record.last_version = removed.version;
+        self.accounts.insert(account_id.clone(), record);
+        let after = self.storage_used();
+        let freed = u128::from(before.saturating_sub(after)) * env::storage_byte_cost().as_yoctonear();
+        let refund = self.release_paid(&account_id, freed);
+        refund_to(&account_id, refund);
+        emit(
+            "vendor_removed",
+            json!({ "account_id": account_id, "storage_refund": U128(refund) }),
+        );
+    }
+
+    /// yoctoNEAR to attach to `set_vendor` when creating an entry with these lengths (in bytes)
+    /// of `display_name` (UTF-8), `address` and `asset_id`. Assumes the longest account id and
+    /// chain name, so it is an upper bound; the excess is refunded.
+    pub fn storage_cost_estimate(&self, display_name_len: u32, address_len: u32, asset_len: u32) -> U128 {
+        let bytes = entry_storage_bytes(
+            MAX_ACCOUNT_ID_LEN,
+            u64::from(display_name_len),
+            MAX_CHAIN_LEN,
+            u64::from(asset_len),
+            u64::from(address_len),
+        );
+        U128(u128::from(bytes) * env::storage_byte_cost().as_yoctonear())
+    }
+
+    /// yoctoNEAR the account has paid for storage and not had refunded (0 if none).
+    pub fn storage_paid(&self, account_id: AccountId) -> U128 {
+        U128(self.accounts.get(&account_id).map(|a| a.paid_storage).unwrap_or(0))
     }
 
     pub fn get_vendor(&self, account_id: AccountId) -> Option<VendorView> {
@@ -228,6 +362,38 @@ impl VendorRegistry {
 
     pub fn count(&self) -> u32 {
         self.vendors.len()
+    }
+}
+
+impl VendorRegistry {
+    /// Write cached collection changes so `env::storage_usage()` is current.
+    fn storage_used(&mut self) -> u64 {
+        self.vendors.flush();
+        self.accounts.flush();
+        env::storage_usage()
+    }
+
+    /// Update the account's `paid_storage` (the record exists whenever storage was charged).
+    fn change_paid(&mut self, account_id: &AccountId, f: impl FnOnce(u128) -> u128) {
+        if let Some(record) = self.accounts.get_mut(account_id) {
+            record.paid_storage = f(record.paid_storage);
+        }
+    }
+
+    /// Take up to `amount` back out of what the account paid; returns what was taken.
+    fn release_paid(&mut self, account_id: &AccountId, amount: u128) -> u128 {
+        let paid = self.accounts.get(account_id).map(|a| a.paid_storage).unwrap_or(0);
+        let back = paid.min(amount);
+        self.change_paid(account_id, |p| p - back);
+        back
+    }
+}
+
+/// Send `amount` yoctoNEAR back to `to` (nothing if 0). If the account no longer exists, the
+/// transfer fails and the NEAR returns to this contract.
+fn refund_to(to: &AccountId, amount: u128) {
+    if amount > 0 {
+        Promise::new(to.clone()).transfer(NearToken::from_yoctonear(amount)).detach();
     }
 }
 
