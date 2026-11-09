@@ -15,7 +15,8 @@ NETWORK=testnet
 OWNER=${OWNER:-orvantra-owner.testnet}  # the human (dev stand-in on testnet); owns token supply + treasury
 AGENT=orvantra-agent.testnet           # the AI agent's account (only it may propose_payment)
 TOKEN=orvantra-tusdc.testnet           # test-token contract (tUSDC, 6 decimals)
-TREASURY=orvantra-treasury.testnet     # treasury contract
+# Treasury contract. The 2026-11-08 security fixes changed its state layout: use a FRESH account.
+TREASURY=${TREASURY:-orvantra-treasury-v4.testnet}
 REGISTRY=orvantra-registry.testnet     # vendor registry (already deployed, see docs/DEPLOYMENTS.md)
 CROSS_VENDOR=orvantra-acme.testnet     # registry payout: USDC on Base (cross-chain path)
 NEAR_VENDOR=orvantra-bob.testnet       # we set its payout to tUSDC on NEAR (direct path)
@@ -28,6 +29,7 @@ AUTO_PAY_THRESHOLD=$((100 * U))        # > 100 tUSDC needs the owner
 MIN_PAYOUT_AGE_SEC=120                 # demo value: payouts younger than 2 min need the owner
 VENDOR_MAX=$((300 * U))                # max per invoice
 STORAGE_DEPOSIT='0.00125 NEAR'
+REGISTRY_DEPOSIT='0.01 NEAR'           # set_vendor: vendor pays its entry's storage, excess refunded
 GAS='150.0 Tgas'                       # propose/approve: >= 100 TGas (see treasury README)
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -80,6 +82,9 @@ json() { # json 'python expression on d' < JSON
   python3 -c "import json,sys; d=json.load(sys.stdin); print($1)"
 }
 
+# The treasury only accepts 64-hex invoice hashes (sha256), like the agent sends.
+hash() { python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" "$1"; }
+
 exists() { near account view-account-summary "$1" network-config "$NETWORK" now >/dev/null 2>&1; }
 
 ensure_account() {
@@ -102,7 +107,7 @@ propose() { # propose VENDOR AMOUNT HASH [DEPOSIT_ADDRESS] -> prints new payment
   version="$(view "$REGISTRY" get_vendor "{\"account_id\":\"$1\"}" | json 'd["version"] if d else 0')"
   dep="null"; [[ -n "${4:-}" ]] && dep="\"$4\""
   call "$AGENT" "$TREASURY" propose_payment \
-    "{\"invoice_hash\":\"$3\",\"vendor\":\"$1\",\"amount\":\"$2\",\"payout_version\":$version,\"deposit_address\":$dep,\"quote_hash\":null,\"memo\":\"orvantra e2e $3\"}" \
+    "{\"invoice_hash\":\"$(hash "$3")\",\"vendor\":\"$1\",\"amount\":\"$2\",\"payout_version\":$version,\"deposit_address\":$dep,\"quote_hash\":null,\"memo\":\"orvantra e2e $3\"}" \
     '0 NEAR' || return 1
   last_payment_id
 }
@@ -138,11 +143,12 @@ if view "$TREASURY" get_config '{}' >/dev/null; then
   echo "   already deployed+initialised (skip; to ship new code: near contract deploy $TREASURY use-file $TREASURY_WASM without-init-call ...)"
 else
   near contract deploy "$TREASURY" use-file "$TREASURY_WASM" \
-    with-init-call new json-args "{\"owner\":\"$OWNER\",\"agent\":\"$AGENT\",\"registry\":\"$REGISTRY\",\"token\":\"$TOKEN\",\"auto_pay_threshold\":\"$AUTO_PAY_THRESHOLD\",\"monthly_cap\":\"$((1000 * U))\",\"min_payout_age_sec\":$MIN_PAYOUT_AGE_SEC}" \
+    with-init-call new json-args "{\"owner\":\"$OWNER\",\"agent\":\"$AGENT\",\"registry\":\"$REGISTRY\",\"token\":\"$TOKEN\",\"auto_pay_threshold\":\"$AUTO_PAY_THRESHOLD\",\"monthly_cap\":\"$((1000 * U))\",\"min_payout_age_sec\":$MIN_PAYOUT_AGE_SEC,\"cross_chain_auto_pay_threshold\":\"0\",\"max_open_payments\":25,\"near_reserve\":\"500000000000000000000000\"}" \
     prepaid-gas '100.0 Tgas' attached-deposit '0 NEAR' \
     network-config "$NETWORK" sign-with-legacy-keychain send
 fi
 view "$TREASURY" get_config '{}'
+expect "view $TREASURY get_config" "cross_chain_auto_pay_threshold=\"0\" (owner confirms every cross-chain payout), max_open_payments=25, near_reserve=0.5 NEAR, available_near > near_reserve"
 
 # ================================================================== 4. token storage + funding
 step "4. Register treasury + $NEAR_VENDOR on the token, fund the treasury"
@@ -163,10 +169,11 @@ expect "view $TOKEN ft_balance_of {\"account_id\":\"$TREASURY\"}" "\"$FUND\" or 
 
 # ================================================================== 5. vendors + policy
 step "5. $NEAR_VENDOR publishes a NEAR-direct payout (tUSDC on NEAR) in the registry"
-# set_vendor requires exactly 1 yoctoNEAR (forces a full-access key, i.e. a real wallet confirmation).
+# set_vendor needs a deposit (forces a full-access key, i.e. a real wallet confirmation). The vendor pays
+# for any storage its entry needs; the rest of the 0.01 NEAR is refunded (same-size updates keep only 1 yocto).
 call "$NEAR_VENDOR" "$REGISTRY" set_vendor \
   "{\"display_name\":\"Bob Supplies\",\"chain\":\"near\",\"asset_id\":\"nep141:$TOKEN\",\"address\":\"$NEAR_VENDOR\"}" \
-  '1 yoctoNEAR'
+  "$REGISTRY_DEPOSIT"
 view "$REGISTRY" get_vendor "{\"account_id\":\"$NEAR_VENDOR\"}"
 echo "   ($CROSS_VENDOR stays on chain \"base\": cross-chain path, needs a 1Click deposit address)"
 
@@ -222,17 +229,17 @@ expect "owner approve_payment($id) (re-checks registry version first)" "status=P
 step "10. Duplicate invoice (re-submit $SMALL_HASH)"
 v="$(view "$REGISTRY" get_vendor "{\"account_id\":\"$NEAR_VENDOR\"}" | json 'd["version"]')"
 call_expect_fail "invoice already used" "$AGENT" "$TREASURY" propose_payment \
-  "{\"invoice_hash\":\"$SMALL_HASH\",\"vendor\":\"$NEAR_VENDOR\",\"amount\":\"$((5 * U))\",\"payout_version\":$v}" '0 NEAR'
+  "{\"invoice_hash\":\"$(hash "$SMALL_HASH")\",\"vendor\":\"$NEAR_VENDOR\",\"amount\":\"$((5 * U))\",\"payout_version\":$v}" '0 NEAR'
 expect "same invoice hash again" "tx fails: \"invoice already used\" (nothing stored, nothing paid)"
 
 # ================================================================== 11. over caps
 step "11. Over caps"
 call_expect_fail "amount above vendor max_per_invoice" "$AGENT" "$TREASURY" propose_payment \
-  "{\"invoice_hash\":\"inv-huge-$RUN\",\"vendor\":\"$CROSS_VENDOR\",\"amount\":\"$((400 * U))\",\"payout_version\":2,\"deposit_address\":null}" '0 NEAR'
+  "{\"invoice_hash\":\"$(hash "inv-huge-$RUN")\",\"vendor\":\"$CROSS_VENDOR\",\"amount\":\"$((400 * U))\",\"payout_version\":2,\"deposit_address\":null}" '0 NEAR'
 expect "400 tUSDC to $CROSS_VENDOR (max_per_invoice 300)" "tx fails: \"amount above vendor max_per_invoice\""
 echo "   $NEAR_VENDOR spent this month: $(view "$TREASURY" monthly_spent "{\"vendor\":\"$NEAR_VENDOR\"}") / cap $BOB_CAP"
 call_expect_fail "over vendor monthly cap" "$AGENT" "$TREASURY" propose_payment \
-  "{\"invoice_hash\":\"inv-cap-$RUN\",\"vendor\":\"$NEAR_VENDOR\",\"amount\":\"$((50 * U))\",\"payout_version\":$v}" '0 NEAR'
+  "{\"invoice_hash\":\"$(hash "inv-cap-$RUN")\",\"vendor\":\"$NEAR_VENDOR\",\"amount\":\"$((50 * U))\",\"payout_version\":$v}" '0 NEAR'
 expect "50 tUSDC more to $NEAR_VENDOR (165 of 200 used)" "tx fails: \"over vendor monthly cap\""
 
 step "Done. Inspect everything:"

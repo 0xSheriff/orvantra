@@ -12,9 +12,27 @@ fn acc(s: &str) -> AccountId {
     s.parse().unwrap()
 }
 
-/// Set the caller and block time for the next calls, attaching the required 1 yoctoNEAR.
+/// 0.01 NEAR: covers the storage of the largest possible entry (the excess is refunded).
+const ENOUGH: u128 = 10_000_000_000_000_000_000_000;
+const BYTE_COST: u128 = 10_000_000_000_000_000_000; // 1e19 yoctoNEAR per byte
+
+/// Set the caller and block time for the next calls, attaching enough for a new entry.
 fn as_caller(who: &str, ts: u64) {
-    as_caller_with_deposit(who, ts, 1);
+    as_caller_with_deposit(who, ts, ENOUGH);
+}
+
+/// NEAR transfers (refunds) the last call created: (receiver, yoctoNEAR).
+fn refunds() -> Vec<(String, u128)> {
+    near_sdk::test_utils::get_created_receipts()
+        .into_iter()
+        .flat_map(|r| {
+            let to = r.receiver_id.to_string();
+            r.actions.into_iter().filter_map(move |a| match a {
+                near_sdk::mock::MockAction::Transfer { deposit, .. } => Some((to.clone(), deposit.as_yoctonear())),
+                _ => None,
+            })
+        })
+        .collect()
 }
 
 fn as_caller_with_deposit(who: &str, ts: u64, yocto: u128) {
@@ -188,7 +206,7 @@ fn remove_deletes_own_entry() {
     register_acme(&mut c);
     assert_eq!(c.count(), 2);
 
-    as_caller("acme.near", 2);
+    as_caller_with_deposit("acme.near", 2, 1);
     c.remove_vendor();
     assert_eq!(c.count(), 1);
     assert_eq!(c.get_vendor(acc("acme.near")), None);
@@ -203,22 +221,26 @@ fn remove_deletes_own_entry() {
 #[test]
 #[should_panic(expected = "vendor not registered")]
 fn remove_without_entry_panics() {
-    as_caller("acme.near", 1);
+    as_caller_with_deposit("acme.near", 1, 1);
     let mut c = VendorRegistry::default();
     c.remove_vendor();
 }
 
+/// L4: the version never restarts, so "version 1" can't mean two different payouts.
 #[test]
-fn re_register_after_remove_starts_fresh() {
+fn re_register_after_remove_continues_version() {
     as_caller("acme.near", 1);
     let mut c = VendorRegistry::default();
     register_acme(&mut c);
     c.set_vendor("Acme".into(), "base".into(), USDC_BASE.into(), EVM_ADDR_2.into());
+    as_caller_with_deposit("acme.near", 2, 1);
     c.remove_vendor();
     as_caller("acme.near", 50);
     let v = register_acme(&mut c);
-    assert_eq!(v.version, 1);
+    assert_eq!(v.version, 3);
     assert_eq!(v.created_at_ns.0, 50);
+    assert_eq!(v.updated_at_ns.0, 50, "fresh updated_at, so the payout-age hold applies");
+    assert_eq!(events()[0]["data"][0]["version"], 3);
 }
 
 #[test]
@@ -308,24 +330,33 @@ fn callers_only_touch_their_own_entry() {
     assert_eq!(c.get_vendor(acc("bob.near")).unwrap().payout.address, EVM_ADDR_2);
 }
 
-// 1 yoctoNEAR requirement: function-call access keys cannot attach deposits, so these calls always
+// Deposit requirement: function-call access keys cannot attach deposits, so these calls always
 // need a full-access key (an explicit wallet confirmation).
 
-const ONE_YOCTO_ERR: &str = "Requires attached deposit of exactly 1 yoctoNEAR";
-
 #[test]
-#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
+#[should_panic(expected = "Requires attached deposit of at least 1 yoctoNEAR")]
 fn set_vendor_rejects_zero_deposit() {
     as_caller_with_deposit("acme.near", 1, 0);
     let mut c = VendorRegistry::default();
     register_acme(&mut c);
 }
 
+/// C-M3: creating an entry with only the old 1-2 yocto no longer works: the vendor pays storage.
 #[test]
-#[should_panic(expected = "Requires attached deposit of exactly 1 yoctoNEAR")]
-fn set_vendor_rejects_two_yocto() {
+#[should_panic(expected = "attached deposit too small")]
+fn set_vendor_create_needs_storage_deposit() {
     as_caller_with_deposit("acme.near", 1, 2);
     let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+}
+
+#[test]
+#[should_panic(expected = "Requires attached deposit of at least 1 yoctoNEAR")]
+fn set_vendor_update_rejects_zero_deposit() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    as_caller_with_deposit("acme.near", 2, 0);
     register_acme(&mut c);
 }
 
@@ -361,9 +392,252 @@ fn rejected_deposit_leaves_entry_unchanged() {
     }));
     let msg = res.unwrap_err();
     let msg = msg.downcast_ref::<String>().map(String::as_str).unwrap_or("");
-    assert!(msg.contains(ONE_YOCTO_ERR), "unexpected panic: {msg}");
+    assert!(msg.contains(ERR_NO_DEPOSIT), "unexpected panic: {msg}");
 
     let v = c.get_vendor(acc("acme.near")).unwrap();
     assert_eq!(v.payout.address, EVM_ADDR);
     assert_eq!(v.version, 1);
+}
+
+// ======================================================================= C-M3: vendor-paid storage
+
+/// Storage cost of acme's entry, as charged.
+fn paid(c: &VendorRegistry, who: &str) -> u128 {
+    c.storage_paid(acc(who)).0
+}
+
+#[test]
+fn create_charges_storage_and_refunds_excess() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    let cost = paid(&c, "acme.near");
+    let bytes = entry_storage_bytes(9, 8, 4, USDC_BASE.len() as u64, 42); // acme.near, "Acme Ltd", base
+    assert_eq!(cost, u128::from(bytes) * BYTE_COST, "charge = measured storage of the entry");
+    assert_eq!(refunds(), vec![("acme.near".to_string(), ENOUGH - cost)]);
+}
+
+#[test]
+fn create_with_exact_deposit_has_no_refund() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    let cost = paid(&c, "acme.near");
+    as_caller_with_deposit("abcd.near", 1, cost); // same length as acme.near
+    register_acme(&mut c);
+    assert_eq!(paid(&c, "abcd.near"), cost);
+    assert!(refunds().is_empty());
+}
+
+#[test]
+#[should_panic(expected = "attached deposit too small")]
+fn create_with_one_yocto_less_fails() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    let cost = paid(&c, "acme.near");
+    as_caller_with_deposit("abcd.near", 1, cost - 1); // same length as acme.near
+    register_acme(&mut c);
+}
+
+#[test]
+fn estimate_matches_the_largest_entry_and_bounds_others() {
+    let longest = "a".repeat(64);
+    let name = "é".repeat(64); // 128 bytes
+    let asset = "x".repeat(MAX_ASSET_ID_LEN);
+    as_caller(&longest, 1);
+    let mut c = VendorRegistry::default();
+    c.set_vendor(name.clone(), "avalanche".into(), asset.clone(), EVM_ADDR.into());
+    let est = c.storage_cost_estimate(name.len() as u32, 42, asset.len() as u32).0;
+    assert_eq!(paid(&c, &longest), est, "exact for a 64-char account on the longest chain name");
+    assert!(est <= ENOUGH);
+
+    as_caller("acme.near", 1);
+    register_acme(&mut c);
+    assert!(paid(&c, "acme.near") < c.storage_cost_estimate(8, 42, USDC_BASE.len() as u32).0);
+}
+
+#[test]
+fn estimate_for_a_typical_entry() {
+    // Display name 20 bytes, EVM address, USDC-on-Base asset id: the number the UI shows.
+    as_caller("anyone.near", 1);
+    let c = VendorRegistry::default();
+    let est = c.storage_cost_estimate(20, 42, USDC_BASE.len() as u32).0;
+    let bytes = ENTRY_BASE_BYTES + 2 * 64 + 20 + 9 + USDC_BASE.len() as u64 + 42;
+    assert_eq!(est, u128::from(bytes) * BYTE_COST);
+}
+
+#[test]
+fn update_same_size_costs_one_yocto() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    let cost = paid(&c, "acme.near");
+    as_caller_with_deposit("acme.near", 2, 1);
+    let v = c.set_vendor("Acme Ltd".into(), "base".into(), USDC_BASE.into(), EVM_ADDR_2.into());
+    assert_eq!(v.version, 2);
+    assert_eq!(paid(&c, "acme.near"), cost);
+    assert!(refunds().is_empty(), "the 1 yocto is kept");
+}
+
+#[test]
+fn update_with_extra_deposit_refunds_all_but_one_yocto() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    as_caller_with_deposit("acme.near", 2, 2);
+    register_acme(&mut c);
+    assert_eq!(refunds(), vec![("acme.near".to_string(), 1)]);
+}
+
+#[test]
+fn update_growth_is_charged_and_shrink_refunded() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c); // "Acme Ltd"
+    let cost = paid(&c, "acme.near");
+    as_caller("acme.near", 2);
+    c.set_vendor("Acme Ltd International".into(), "base".into(), USDC_BASE.into(), EVM_ADDR.into());
+    let growth = 14 * BYTE_COST;
+    assert_eq!(paid(&c, "acme.near"), cost + growth);
+    assert_eq!(refunds(), vec![("acme.near".to_string(), ENOUGH - 1 - growth)]);
+
+    as_caller_with_deposit("acme.near", 3, 1);
+    c.set_vendor("Acme".into(), "base".into(), USDC_BASE.into(), EVM_ADDR.into());
+    assert_eq!(paid(&c, "acme.near"), cost - 4 * BYTE_COST);
+    assert_eq!(refunds(), vec![("acme.near".to_string(), growth + 4 * BYTE_COST)]);
+}
+
+#[test]
+#[should_panic(expected = "attached deposit too small")]
+fn update_growth_needs_deposit() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    as_caller_with_deposit("acme.near", 2, 1);
+    c.set_vendor("Acme Ltd International".into(), "base".into(), USDC_BASE.into(), EVM_ADDR.into());
+}
+
+#[test]
+fn remove_refunds_entry_storage_and_keeps_tombstone() {
+    as_caller("acme.near", 1);
+    let mut c = VendorRegistry::default();
+    register_acme(&mut c);
+    let cost = paid(&c, "acme.near");
+    as_caller_with_deposit("acme.near", 2, 1);
+    c.remove_vendor();
+    let tombstone = TOMBSTONE_BASE_BYTES + 9;
+    let refund = cost - u128::from(tombstone) * BYTE_COST;
+    assert_eq!(refunds(), vec![("acme.near".to_string(), refund)]);
+    assert_eq!(paid(&c, "acme.near"), cost - refund, "the tombstone stays paid for");
+    assert_eq!(events()[0]["data"][0]["storage_refund"], refund.to_string());
+
+    // Re-adding charges only the entry again.
+    as_caller("acme.near", 3);
+    register_acme(&mut c);
+    assert_eq!(paid(&c, "acme.near"), cost);
+}
+
+/// C-M3: the create -> remove cycle leaves the contract no poorer (the abuse in the review).
+#[test]
+fn create_remove_cycle_costs_the_contract_nothing() {
+    as_caller("spam.near", 1);
+    let mut c = VendorRegistry::default();
+    c.set_vendor("x".repeat(64), "base".into(), "a".repeat(128), EVM_ADDR.into());
+    let charged = ENOUGH - refunds()[0].1;
+    as_caller_with_deposit("spam.near", 2, 1);
+    c.remove_vendor();
+    let refunded = refunds()[0].1;
+    // The vendor keeps paying for exactly the bytes that stay (its 74-byte tombstone record).
+    let stays = u128::from(TOMBSTONE_BASE_BYTES + 9) * BYTE_COST;
+    assert_eq!(charged - refunded, stays);
+    assert_eq!(paid(&c, "spam.near"), stays);
+}
+
+// ======================================================================= migration from the old layout
+
+fn old_vendor(version: u32) -> Vendor {
+    Vendor {
+        display_name: "Old Acme".into(),
+        payout: Payout { chain: "base".into(), asset_id: USDC_BASE.into(), address: EVM_ADDR.into() },
+        created_at_ns: 10,
+        updated_at_ns: 20,
+        version,
+    }
+}
+
+/// Write a `RegistryV1` state with acme (v3) and bob (v1), as the live registry has.
+fn write_old_state() {
+    as_caller("registry.near", 100);
+    let mut vendors = IterableMap::new(StorageKey::Vendors);
+    vendors.insert(acc("acme.near"), old_vendor(3));
+    vendors.insert(acc("bob.near"), old_vendor(1));
+    let old = RegistryV1 { vendors };
+    env::state_write(&old);
+}
+
+#[test]
+fn migrate_keeps_entries_and_versions() {
+    write_old_state();
+    let c = VendorRegistry::migrate();
+    assert_eq!(c.count(), 2);
+    let a = c.get_vendor(acc("acme.near")).unwrap();
+    assert_eq!((a.version, a.created_at_ns.0, a.updated_at_ns.0), (3, 10, 20));
+    assert_eq!(a.payout.address, EVM_ADDR);
+    assert_eq!(a.display_name, "Old Acme");
+    assert_eq!(c.storage_paid(acc("acme.near")).0, 0);
+    let ids: Vec<String> = c.get_vendors(None, None).into_iter().map(|v| v.account_id.to_string()).collect();
+    assert_eq!(ids, ["acme.near", "bob.near"]);
+}
+
+#[test]
+fn migrated_entry_is_removable_and_version_continues() {
+    write_old_state();
+    let mut c = VendorRegistry::migrate();
+    as_caller_with_deposit("acme.near", 200, 1);
+    c.remove_vendor();
+    assert!(refunds().is_empty(), "nothing was paid, nothing is refunded");
+    assert_eq!(c.count(), 1);
+    as_caller("acme.near", 300);
+    let v = register_acme(&mut c);
+    assert_eq!(v.version, 4);
+    assert!(c.storage_paid(acc("acme.near")).0 > 0, "the new entry is paid for");
+}
+
+#[test]
+fn migrated_entry_same_size_update_costs_one_yocto() {
+    write_old_state();
+    let mut c = VendorRegistry::migrate();
+    as_caller_with_deposit("acme.near", 200, 1);
+    let v = c.set_vendor("Old Acme".into(), "base".into(), USDC_BASE.into(), EVM_ADDR_2.into());
+    assert_eq!(v.version, 4);
+    assert!(refunds().is_empty());
+}
+
+#[test]
+fn migrated_entry_growth_is_charged() {
+    write_old_state();
+    let mut c = VendorRegistry::migrate();
+    as_caller("acme.near", 200);
+    c.set_vendor("Old Acme Holdings".into(), "base".into(), USDC_BASE.into(), EVM_ADDR.into());
+    let p = c.storage_paid(acc("acme.near")).0;
+    // 9 more name bytes + the new per-account record.
+    let record = TOMBSTONE_BASE_BYTES + 9;
+    assert_eq!(p, u128::from(9 + record) * BYTE_COST);
+}
+
+#[test]
+#[should_panic(expected = "Cannot deserialize the contract state")]
+fn migrate_twice_fails() {
+    write_old_state();
+    let c = VendorRegistry::migrate();
+    env::state_write(&c);
+    VendorRegistry::migrate();
+}
+
+#[test]
+#[should_panic(expected = "no registry state to migrate")]
+fn migrate_without_state_fails() {
+    as_caller("registry.near", 1);
+    VendorRegistry::migrate();
 }

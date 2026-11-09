@@ -12,8 +12,10 @@ use serde_json::{json, Value};
 const USDC_BASE: &str = "nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near";
 const ALICE_ADDR: &str = "0x1111111111111111111111111111111111111111";
 const BOB_ADDR: &str = "0x2222222222222222222222222222222222222222";
-/// set_vendor / remove_vendor require exactly 1 yoctoNEAR (forces a full-access key).
+/// remove_vendor and same-size set_vendor updates need 1 yoctoNEAR (forces a full-access key).
 const ONE_YOCTO: NearToken = NearToken::from_yoctonear(1);
+/// Creating an entry: the vendor pays its storage (excess refunded). 0.01 NEAR covers any entry.
+const STORAGE: NearToken = NearToken::from_millinear(10);
 
 #[tokio::test]
 async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
@@ -44,10 +46,22 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": ALICE_ADDR,
         }))
-        .deposit(ONE_YOCTO)
+        .deposit(STORAGE)
         .transact()
         .await?;
     assert!(res.is_success(), "alice set_vendor failed: {res:?}");
+    let paid: String = contract
+        .view("storage_paid")
+        .args_json(json!({ "account_id": alice.id() }))
+        .await?
+        .json()?;
+    let estimate: String = contract
+        .view("storage_cost_estimate")
+        .args_json(json!({ "display_name_len": 14, "address_len": 42, "asset_len": USDC_BASE.len() }))
+        .await?
+        .json()?;
+    let paid: u128 = paid.parse()?;
+    assert!(paid > 0 && paid <= estimate.parse::<u128>()?, "paid {paid}, estimate {estimate}");
     assert!(res.logs().iter().any(|l| l.starts_with("EVENT_JSON:")
         && l.contains("\"event\":\"vendor_registered\"")));
 
@@ -61,10 +75,25 @@ async fn alice_registers_bob_cannot_change_it() -> anyhow::Result<()> {
             "asset_id": USDC_BASE,
             "address": BOB_ADDR,
         }))
-        .deposit(ONE_YOCTO)
+        .deposit(STORAGE)
         .transact()
         .await?;
     assert!(res.is_success(), "bob set_vendor failed: {res:?}");
+
+    // Creating an entry with only 1 yocto fails: the vendor must pay for its storage.
+    let carol = root
+        .create_subaccount("carol")
+        .initial_balance(NearToken::from_near(10))
+        .transact()
+        .await?
+        .into_result()?;
+    let res = carol
+        .call(contract.id(), "set_vendor")
+        .args_json(json!({ "display_name": "Carol", "chain": "base", "asset_id": USDC_BASE, "address": BOB_ADDR }))
+        .deposit(ONE_YOCTO)
+        .transact()
+        .await?;
+    assert!(res.is_failure(), "set_vendor without storage deposit must fail");
 
     // Bob also cannot remove alice's entry: remove_vendor only removes the caller's own entry.
     // Without the 1 yoctoNEAR (as a function-call access key would send) the call fails.
