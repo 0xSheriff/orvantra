@@ -41,6 +41,20 @@ wallet (Meteor) — the demo extra that proves the cross-chain payout path works
   older Verifier-Contract path, not the 1Click one. A NEP-141 USDC origin, by contrast, needs
   the `ft_transfer_call` mechanism and fails as a plain token send (verified 2026-11-10).
 
+### Reverse swap: Base USDC → NEAR (2026-11-10) — COMPLETED, verified on-chain
+Same delivery primitive, reverse direction. A **manual owner wallet move** (not an Orvantra
+product action — no invoice, vendor, treasury, or agent involved): the owner sent the USDC from
+the bonus payment back to `orvantra.near`, proving 1Click settles EVM → NEAR too.
+- Origin: `0x0533cda710e375b00d106e557da995b859e5bf94` (Base), **1.607589 USDC**
+- 1Click quote: origin Base USDC → destination `nep141:wrap.near`, recipient `orvantra.near`,
+  `refundTo` = the Base 0x address (EVM origin → EVM refund), quote signature VERIFIED
+- Deposit = a **plain ERC20 transfer** to the quote's 0x depositAddress on Base (no memo;
+  `orvantra.near` already had wrap.near storage, so no `storage_deposit` needed)
+- Deposit tx (owner-signed, Base): `0x8af64471b091d9bb68c215e711ebefa3671792dd6bc0460405318c6e409b9a02`
+- 1Click status: **SUCCESS** (4 settle txs, no refund; 0.450901 wNEAR delivered, auto-unwrapped)
+- **Verified delivery on NEAR: `orvantra.near` 0.273425 → 0.71721163 native NEAR**
+  (net +0.4438; ~0.007 NEAR gas across the 4 settle txs). Base USDC balance → 0.
+
 ## Day 5 (2026-11-06) — treasury v2 + restricted agent key
 | Contract / role | Account | Notes |
 |---|---|---|

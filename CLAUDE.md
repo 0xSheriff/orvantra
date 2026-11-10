@@ -26,11 +26,26 @@ Read `docs/ARCHITECTURE.md` and `docs/PLAN.md` first.
   (`orvantra.testnet`) and only when explicitly asked.
 - Keep code simple and well-tested; judges include Claude Code and Codex screening reproducibility.
 
+## Token economy (this runs on a limited 5h/weekly Claude budget — be lean)
+- The repo is small (~8.3k lines). Do NOT re-read files you have already read, and never dump a whole file
+  when a targeted `grep`/`sed -n '10,40p'` gets the answer. Prefer narrow reads.
+- Batch related edits into one pass instead of one edit per turn; run tests once at the end of a coherent
+  change, not after every single edit.
+- Do not spawn sub-agents/workflows for small fixes. One focused pass is cheaper than fanning out.
+- Between distinct phases (implement → test → docs) use `/compact` so you stop re-billing the full history.
+- If a command fails, fix the specific cause; do not retry the same command unchanged.
+
 ## Verified API facts
 - 1Click base: `https://1click.chaindefuser.com/v0` (`/tokens`, `/quote`, `/status`). Requests must send a
   User-Agent header (default Python urllib UA gets 403). Burn addresses (0x...dEaD) are rejected as recipient.
 - USDC on NEAR asset id: `nep141:17208628f84f5d6ad33f0da3bbbeb27ffcb398eac501a31bd6ad2011e36133a1`
 - USDC on Base asset id: `nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near`
+- 1Click deposit = send the origin token to the quote's `depositAddress`, no message/memo:
+  - NEAR origin (`nep141:wrap.near`): plain NEAR transfer.  NEAR USDC origin: `ft_transfer_call` to the
+    USDC contract, `receiver_id=intents.near` + msg.  EVM origin (e.g. Base USDC): plain ERC20 transfer
+    to the 0x depositAddress on that chain (verified 2026-11-10: quote carries no `depositMemo`).
+- 1Click `refundTo` must exist on the ORIGIN chain: a NEAR account for NEAR origin, an EVM 0x address for
+  an EVM origin (a NEAR account id on a Base-origin quote is rejected: "refundTo is not valid").
 - NEAR AI Cloud: `https://cloud-api.near.ai/v1`, model `Qwen/Qwen3-VL-30B-A3B-Instruct` (TEE, verifiable, vision).
   Reader B `z-ai/glm-5.3-flash`. Via `@nearai/inference-sdk` with `e2ee: true`, image_url content works for both and
   `verifyResponse` returns `signatureKind: provider_tee` (verified 2026-11-06).
