@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Orvantra — mark options</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300..700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f6f3ec; --sheet:#fbf9f4; --white:#fffefb;
+    --ink:#1b1a17; --ink-2:#4a4740; --muted:#8a857a;
+    --rule:#e2ddd1; --rule-2:#cfc8b8;
+    --serif:'Newsreader',Georgia,serif;
+    --sans:'IBM Plex Sans',system-ui,sans-serif;
+    --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#efece4;color:var(--ink);font-family:var(--sans);font-size:14px;line-height:1.5;padding:28px}
+  .page{max-width:1420px;margin:0 auto}
+  .head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:1px solid var(--rule-2);padding-bottom:14px;margin-bottom:22px}
+  .head h1{font-family:var(--serif);font-weight:400;letter-spacing:-.015em;font-size:30px}
+  .head .sub{color:var(--muted);font-size:13px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:22px}
+  .card{background:var(--sheet);border:1px solid var(--rule-2);padding:22px 24px 20px}
+  .card .lbl{letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-size:11px;font-weight:500;display:flex;justify-content:space-between}
+  .card .name{font-family:var(--serif);font-weight:400;letter-spacing:-.01em;font-size:22px;margin-top:4px}
+  .card .why{color:var(--ink-2);font-size:13px;margin-top:2px}
+  .marks{display:flex;gap:18px;margin-top:18px;align-items:center}
+  .onpaper{background:var(--paper);border:1px solid var(--rule);width:132px;height:132px;display:grid;place-items:center}
+  .onink{background:var(--ink);width:132px;height:132px;display:grid;place-items:center}
+  .onink svg{color:var(--paper)}
+  .sizes{display:flex;align-items:flex-end;gap:14px;margin-left:auto}
+  .sz{display:flex;flex-direction:column;align-items:center;gap:5px}
+  .sz .box{background:var(--paper);border:1px solid var(--rule);display:grid;place-items:center}
+  .sz small{font-family:var(--mono);color:var(--muted);font-size:10px}
+  .ctx{margin-top:18px;border-top:1px solid var(--rule);padding-top:14px;display:flex;flex-direction:column;gap:12px}
+  .hmock{background:var(--paper);border:1px solid var(--rule);height:56px;display:flex;align-items:center;padding:0 18px;gap:11px}
+  .hmock .word{font-family:var(--serif);font-size:23px;letter-spacing:-.01em}
+  .hmock .nav{margin-left:auto;display:flex;gap:18px;color:var(--muted);font-size:12.5px}
+  .tbar{background:#e5e1d6;border:1px solid var(--rule-2);border-bottom:0;border-radius:10px 10px 0 0;width:300px;height:34px;display:flex;align-items:center;gap:8px;padding:0 12px}
+  .tbar span{font-size:12px;color:var(--ink-2);white-space:nowrap;overflow:hidden}
+  .tbar .x{margin-left:auto;color:var(--muted);font-size:12px}
+  .ctx .tag{font-family:var(--mono);color:var(--muted);font-size:10.5px;margin-top:-8px}
+  svg mark, mark{display:none}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="head">
+    <h1>Orvantra — mark options</h1>
+    <div class="sub">Same mark for logo + favicon · house style: paper, ink, hairline · pick one (or mix)</div>
+  </div>
+  <div class="grid">
+
+    <!-- A — Ledger Check -->
+    <div class="card">
+      <div class="lbl"><span>A</span><span>square + tick</span></div>
+      <div class="name">The Ledger Check</div>
+      <div class="why">A square — one invoice, one entry — carrying the tick of verification. Most legible at 16 px.</div>
+      <div class="marks">
+        <div class="onpaper">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--ink)">
+            <rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/>
+          </svg>
+        </div>
+        <div class="onink">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--paper)">
+            <rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            <path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/>
+          </svg>
+        </div>
+        <div class="sizes">
+          <div class="sz"><div class="box"><svg width="64" height="64" viewBox="0 0 32 32" color="var(--ink)"><rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg></div><small>64</small></div>
+          <div class="sz"><div class="box"><svg width="32" height="32" viewBox="0 0 32 32" color="var(--ink)"><rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg></div><small>32</small></div>
+          <div class="sz"><div class="box"><svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg></div><small>16</small></div>
+        </div>
+      </div>
+      <div class="ctx">
+        <div class="tag">header</div>
+        <div class="hmock">
+          <svg width="24" height="24" viewBox="0 0 32 32" color="var(--ink)"><rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="square"/></svg>
+          <span class="word">Orvantra</span>
+          <span class="nav"><span>For vendors</span><span>For judges</span><span>Open app</span></span>
+        </div>
+        <div class="tag">browser tab</div>
+        <div class="tbar">
+          <svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><rect x="4" y="4" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2.4"/><path d="M10.5 17.2 L14.3 20.8 L21.6 11" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="square"/></svg>
+          <span>Orvantra — the accounts-payable clerk</span><span class="x">✕</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- B — Struck Rule -->
+    <div class="card">
+      <div class="lbl"><span>B</span><span>ring + rule</span></div>
+      <div class="name">The Struck Rule</div>
+      <div class="why">An O pierced by one hairline — the single rule every payment must pass. Reads as Ø; unmistakable at any size.</div>
+      <div class="marks">
+        <div class="onpaper">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--ink)">
+            <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/>
+            <line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+        </div>
+        <div class="onink">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--paper)">
+            <circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/>
+            <line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+        </div>
+        <div class="sizes">
+          <div class="sz"><div class="box"><svg width="64" height="64" viewBox="0 0 32 32" color="var(--ink)"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="1.8"/></svg></div><small>64</small></div>
+          <div class="sz"><div class="box"><svg width="32" height="32" viewBox="0 0 32 32" color="var(--ink)"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.4"/><line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="2"/></svg></div><small>32</small></div>
+          <div class="sz"><div class="box"><svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="3"/><line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="2.6"/></svg></div><small>16</small></div>
+        </div>
+      </div>
+      <div class="ctx">
+        <div class="tag">header</div>
+        <div class="hmock">
+          <svg width="24" height="24" viewBox="0 0 32 32" color="var(--ink)"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="1.8"/></svg>
+          <span class="word">Orvantra</span>
+          <span class="nav"><span>For vendors</span><span>For judges</span><span>Open app</span></span>
+        </div>
+        <div class="tag">browser tab</div>
+        <div class="tbar">
+          <svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><circle cx="16" cy="16" r="9" fill="none" stroke="currentColor" stroke-width="3"/><line x1="4.5" y1="16" x2="27.5" y2="16" stroke="currentColor" stroke-width="2.6"/></svg>
+          <span>Orvantra — the accounts-payable clerk</span><span class="x">✕</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- C — Monogram Tile -->
+    <div class="card">
+      <div class="lbl"><span>C</span><span>filled tile + serif O</span></div>
+      <div class="name">The Monogram</div>
+      <div class="why">A filled ink tile carrying the serif O — a stamp, a seal, an initials block. Strongest presence in a tab; the O is traced to paths for production.</div>
+      <div class="marks">
+        <div class="onpaper">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--ink)">
+            <rect x="2.5" y="2.5" width="27" height="27" fill="currentColor"/>
+            <text x="16" y="22.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="18.5" font-weight="500" fill="#f6f3ec">O</text>
+          </svg>
+        </div>
+        <div class="onink">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--paper)">
+            <rect x="2.5" y="2.5" width="27" height="27" fill="currentColor"/>
+            <text x="16" y="22.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="18.5" font-weight="500" fill="#1b1a17">O</text>
+          </svg>
+        </div>
+        <div class="sizes">
+          <div class="sz"><div class="box"><svg width="64" height="64" viewBox="0 0 32 32" color="var(--ink)"><rect x="2.5" y="2.5" width="27" height="27" fill="currentColor"/><text x="16" y="22.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="18.5" font-weight="500" fill="#f6f3ec">O</text></svg></div><small>64</small></div>
+          <div class="sz"><div class="box"><svg width="32" height="32" viewBox="0 0 32 32" color="var(--ink)"><rect x="2.5" y="2.5" width="27" height="27" fill="currentColor"/><text x="16" y="22.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="18.5" font-weight="500" fill="#f6f3ec">O</text></svg></div><small>32</small></div>
+          <div class="sz"><div class="box"><svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><rect x="2" y="2" width="28" height="28" fill="currentColor"/><text x="16" y="22.8" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="19" font-weight="600" fill="#f6f3ec">O</text></svg></div><small>16</small></div>
+        </div>
+      </div>
+      <div class="ctx">
+        <div class="tag">header</div>
+        <div class="hmock">
+          <svg width="23" height="23" viewBox="0 0 32 32" color="var(--ink)"><rect x="2.5" y="2.5" width="27" height="27" fill="currentColor"/><text x="16" y="22.6" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="18.5" font-weight="500" fill="#f6f3ec">O</text></svg>
+          <span class="word">Orvantra</span>
+          <span class="nav"><span>For vendors</span><span>For judges</span><span>Open app</span></span>
+        </div>
+        <div class="tag">browser tab</div>
+        <div class="tbar">
+          <svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><rect x="2" y="2" width="28" height="28" fill="currentColor"/><text x="16" y="22.8" text-anchor="middle" font-family="Newsreader, Georgia, serif" font-size="19" font-weight="600" fill="#f6f3ec">O</text></svg>
+          <span>Orvantra — the accounts-payable clerk</span><span class="x">✕</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- D — Bare Check -->
+    <div class="card">
+      <div class="lbl"><span>D</span><span>tick only</span></div>
+      <div class="name">The Tick</div>
+      <div class="why">Just the verification mark, heavy and alone. Cleanest favicon of the four; least identity at a glance (a check is a check).</div>
+      <div class="marks">
+        <div class="onpaper">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--ink)">
+            <path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square"/>
+          </svg>
+        </div>
+        <div class="onink">
+          <svg width="88" height="88" viewBox="0 0 32 32" color="var(--paper)">
+            <path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square"/>
+          </svg>
+        </div>
+        <div class="sizes">
+          <div class="sz"><div class="box"><svg width="64" height="64" viewBox="0 0 32 32" color="var(--ink)"><path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="square"/></svg></div><small>64</small></div>
+          <div class="sz"><div class="box"><svg width="32" height="32" viewBox="0 0 32 32" color="var(--ink)"><path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="4.4" stroke-linecap="square"/></svg></div><small>32</small></div>
+          <div class="sz"><div class="box"><svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/></svg></div><small>16</small></div>
+        </div>
+      </div>
+      <div class="ctx">
+        <div class="tag">header</div>
+        <div class="hmock">
+          <svg width="24" height="24" viewBox="0 0 32 32" color="var(--ink)"><path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="4.6" stroke-linecap="square"/></svg>
+          <span class="word">Orvantra</span>
+          <span class="nav"><span>For vendors</span><span>For judges</span><span>Open app</span></span>
+        </div>
+        <div class="tag">browser tab</div>
+        <div class="tbar">
+          <svg width="16" height="16" viewBox="0 0 32 32" color="var(--ink)"><path d="M7 17.5 L13 23.5 L25 8" fill="none" stroke="currentColor" stroke-width="5" stroke-linecap="square"/></svg>
+          <span>Orvantra — the accounts-payable clerk</span><span class="x">✕</span>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</body>
+</html>
