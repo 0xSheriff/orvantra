@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { publicConfig, publicLinks } from '@/lib/server/config';
+import { Mark } from '@/components/Mark';
 
 const TITLE = 'For judges — try Orvantra in five steps';
 const DESCRIPTION =
@@ -23,7 +24,7 @@ export default function Judges() {
     <div className="split">
       <section className="half light">
         <header className="top">
-          <Link className="logo" href="/">Orvantra</Link>
+          <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
         </header>
         <main className="mid" id="main">
           <Link className="back" href="/"><span className="ar" aria-hidden="true">←</span> Home</Link>

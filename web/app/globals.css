@@ -19,7 +19,8 @@ button { font: inherit; color: inherit; }
 /* ---------------------------------------------------------------- shell */
 .app { display: grid; grid-template-columns: 220px 1fr; min-height: 100vh; }
 .side { border-right: 1px solid var(--rule); padding: 28px 24px; display: flex; flex-direction: column; gap: 28px; position: sticky; top: 0; height: 100vh; }
-.brand { font-family: var(--serif); font-size: 22px; letter-spacing: -.01em; text-decoration: none; display: block; }
+.brand { font-family: var(--serif); font-size: 22px; letter-spacing: -.01em; text-decoration: none; display: flex; align-items: center; gap: 10px; }
+.brand > span { display: flex; flex-direction: column; }
 .brand small { display: block; font-family: var(--sans); font-size: 11px; color: var(--muted); letter-spacing: .08em; text-transform: uppercase; margin-top: 2px; }
 .navlist a { display: flex; justify-content: space-between; align-items: center; min-height: 44px; padding: 7px 0; color: var(--ink-2); text-decoration: none; border-bottom: 1px solid transparent; }
 .navlist a:hover { color: var(--ink); }
@@ -192,7 +193,7 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 .split .dark { background: var(--ink); color: var(--d-text); }
 .split .dark :focus-visible { outline-color: var(--d-text); }
 .split .top { display: flex; align-items: center; height: 36px; }
-.split .logo { font-family: var(--serif); font-size: 24px; letter-spacing: -.01em; text-decoration: none; }
+.split .logo { font-family: var(--serif); font-size: 24px; letter-spacing: -.01em; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
 .split .mid { margin: auto 0; padding: 48px 0; }
 .split .foot { font-size: 12.5px; color: var(--muted); }
 .split .dark .foot { color: var(--d-3); }

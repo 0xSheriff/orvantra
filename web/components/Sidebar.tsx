@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { fmtAmount } from '@/lib/format';
 import { getData } from '@/lib/server/cached';
+import { Mark } from './Mark';
 import { NavList } from './NavList';
 import { WalletStatus } from './WalletStatus';
 
@@ -9,7 +10,7 @@ export async function Sidebar() {
   const unit = d.ctx.unit;
   return (
     <aside className="side" aria-label="Orvantra">
-      <Link className="brand" href="/review">Orvantra<small>Accounts payable</small></Link>
+      <Link className="brand" href="/review"><Mark size={26} /><span>Orvantra<small>Accounts payable</small></span></Link>
       <NavList counts={{ approval: d.pending.length, invoices: d.counts.all, vendors: d.vendors.filter((v) => v.policy).length }} />
       <div className="sidefoot">
         <WalletStatus owner={d.config?.owner ?? null} />

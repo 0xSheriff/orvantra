@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { VendorPanel } from '@/components/VendorPanel';
 import { WalletProvider } from '@/components/WalletProvider';
+import { Mark } from '@/components/Mark';
 import { feeSentence } from '@/lib/registry';
 import { vendorPageData } from '@/lib/server/vendor';
 
@@ -26,7 +27,7 @@ export default async function Register() {
     <div className="split vendor">
       <section className="half light">
         <header className="top">
-          <Link className="logo" href="/">Orvantra</Link>
+          <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
         </header>
         <main className="mid" id="main">
           <Link className="back" href="/"><span className="ar" aria-hidden="true">←</span> Home</Link>
