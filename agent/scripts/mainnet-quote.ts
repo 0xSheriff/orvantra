@@ -18,7 +18,7 @@ const arg = (name: string, def?: string) => {
 
 const exp: QuoteExpectation = {
   dry: false,
-  originAsset: MAINNET_USDC_NEAR,
+  originAsset: arg('origin', MAINNET_USDC_NEAR)!,
   destinationAsset: arg('dest', 'nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near')!,
   recipient: arg('recipient')!,
   amount: arg('amount', '1000000')!,
