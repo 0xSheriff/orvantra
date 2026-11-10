@@ -4,6 +4,7 @@ import type { NormalizedInvoice } from '../src/types.ts';
 import type { CheckInput } from '../src/checks.ts';
 
 export const invoice = (over: Partial<NormalizedInvoice> = {}): NormalizedInvoice => ({
+  document_type: 'invoice',
   vendor_name: 'Acme Design Studio',
   vendor_account: 'acme.testnet',
   invoice_number: 'INV-1',
@@ -39,6 +40,8 @@ export const config: TreasuryConfig = {
   auto_pay_threshold: '100000000',
   monthly_cap: '1000000000',
   min_payout_age_sec: 120,
+  /** High on purpose: most tests are about other rules (the contract default is "0": the owner confirms every cross-chain payout). */
+  cross_chain_auto_pay_threshold: '1000000000000',
   paused: false,
   payment_count: 0,
 };

@@ -6,7 +6,11 @@ import { BOXES_PROMPT, BOXES_SCHEMA, parseBoxes } from './boxes.ts';
 import type { Extraction } from './types.ts';
 
 export const BASE_URL = 'https://cloud-api.near.ai/v1';
-export const MAX_PAGES = 4;
+/** A PDF with more pages is refused (the owner sees the whole file, so the agent must read all of it). */
+export const MAX_PAGES = 2;
+/** PDFs are rendered at this scale; a page that would need a bigger canvas than MAX_RENDER_PX is refused. */
+export const RENDER_SCALE = 2;
+export const MAX_RENDER_PX = 5000;
 
 export interface ReaderSpec {
   id: 'A' | 'B';
@@ -15,17 +19,24 @@ export interface ReaderSpec {
   boxes?: boolean;
 }
 
+/** The two readers must be different models: the same model twice would "agree" with itself. */
 export function readerSpecs(env: NodeJS.ProcessEnv = process.env): ReaderSpec[] {
-  return [
+  const specs: ReaderSpec[] = [
     { id: 'A', model: env.READER_A_MODEL ?? 'Qwen/Qwen3-VL-30B-A3B-Instruct', boxes: env.READER_A_BOXES !== '0' },
     { id: 'B', model: env.READER_B_MODEL ?? 'z-ai/glm-5.3-flash' },
   ];
+  if (specs[0].model.trim().toLowerCase() === specs[1].model.trim().toLowerCase()) {
+    throw new Error(`READER_A_MODEL and READER_B_MODEL are both "${specs[0].model}": the two readers must be different models`);
+  }
+  return specs;
 }
 
 export interface Receipt {
   verified: boolean;
   /** 'provider_tee' = signed by the attested model TEE; 'gateway' = signed by the attested gateway only. */
   signature_kind: string | null;
+  /** True only for provider_tee: the answer was signed inside the model's own TEE (a gateway signature is not). */
+  tee: boolean;
   completion_id: string | null;
   /** Field-level end-to-end encryption actually used for this request. */
   e2ee: boolean;
@@ -65,6 +76,29 @@ export function sniffType(buf: Buffer): 'png' | 'jpeg' | 'pdf' | null {
   return null;
 }
 
+/**
+ * Refuse a PDF with more than MAX_PAGES pages or a page that would render larger than MAX_RENDER_PX x MAX_RENDER_PX
+ * at RENDER_SCALE. Reads only the page size (no rendering), so a huge MediaBox cannot exhaust memory.
+ */
+export async function checkPdfLimits(buf: Buffer, limits: { maxPages?: number; maxPx?: number } = {}): Promise<void> {
+  const maxPages = limits.maxPages ?? MAX_PAGES;
+  const maxPx = limits.maxPx ?? MAX_RENDER_PX;
+  const pdfjs = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const loading = pdfjs.getDocument({ data: new Uint8Array(buf), useSystemFonts: false });
+  const doc = await loading.promise;
+  try {
+    if (doc.numPages > maxPages) throw new Error(`PDF has ${doc.numPages} pages; Orvantra reads at most ${maxPages}`);
+    for (let i = 1; i <= doc.numPages; i++) {
+      const page = await doc.getPage(i);
+      const v = page.getViewport({ scale: RENDER_SCALE });
+      page.cleanup();
+      if (v.width > maxPx || v.height > maxPx) throw new Error(`PDF page ${i} is too large (${Math.round(v.width)}x${Math.round(v.height)} px when rendered; the limit is ${maxPx}x${maxPx})`);
+    }
+  } finally {
+    await loading.destroy();
+  }
+}
+
 /** Load an invoice as page images. PDFs are rendered page by page (up to MAX_PAGES) to PNG. */
 export async function loadPages(file: string): Promise<PageImage[]> {
   const buf = await readFile(file);
@@ -72,11 +106,12 @@ export async function loadPages(file: string): Promise<PageImage[]> {
   if (kind === 'png') return [{ mime: 'image/png', data: buf }];
   if (kind === 'jpeg') return [{ mime: 'image/jpeg', data: buf }];
   if (kind === 'pdf') {
+    await checkPdfLimits(buf);
     const { pdf } = await import('pdf-to-img');
-    const doc = await pdf(buf, { scale: 2 });
+    const doc = await pdf(buf, { scale: RENDER_SCALE });
     try {
       const pages: PageImage[] = [];
-      for (let i = 1; i <= Math.min(doc.length, MAX_PAGES); i++) pages.push({ mime: 'image/png', data: await doc.getPage(i) });
+      for (let i = 1; i <= doc.length; i++) pages.push({ mime: 'image/png', data: await doc.getPage(i) });
       return pages;
     } finally {
       await doc.destroy();
@@ -93,10 +128,11 @@ export const EXTRACTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
   required: [
-    'vendor_name', 'vendor_near_account', 'invoice_number', 'issue_date', 'due_date',
+    'document_type', 'vendor_name', 'vendor_near_account', 'invoice_number', 'issue_date', 'due_date',
     'currency', 'total', 'line_items', 'payment_instructions_text',
   ],
   properties: {
+    document_type: { type: 'string', enum: ['invoice', 'credit_note', 'receipt', 'other'], description: 'What the document is: invoice (a request for payment), credit_note (credit memo / refund / amount owed TO the customer), receipt (already paid), other' },
     vendor_name: { type: 'string', description: 'Name of the business that issued the invoice' },
     vendor_near_account: { ...nullableString, description: 'NEAR account id of the vendor as printed (e.g. acme.near), or null' },
     invoice_number: { type: 'string' },
@@ -122,6 +158,7 @@ export const EXTRACTION_SCHEMA = {
 
 const SYSTEM_PROMPT = `You are an accounts-payable clerk reading one invoice image. Extract the fields defined by the JSON schema.
 Rules:
+- document_type: "invoice" only for a request for payment. A credit note / credit memo / refund / negative or parenthesised total is "credit_note"; a paid receipt is "receipt"; anything else "other".
 - Copy values exactly as printed. Do not compute, correct or guess. If a value is not printed, use null (or "" for required strings).
 - total: the amount printed as the invoice TOTAL / amount due, not a sum you calculate.
 - line_items: every billed line with its printed amount.
@@ -171,6 +208,7 @@ export function parseExtraction(content: string): Extraction {
   const str = (v: unknown) => (typeof v === 'string' ? v : v == null ? '' : String(v));
   const nstr = (v: unknown) => (v == null || v === '' ? null : String(v));
   const out: Extraction = {
+    document_type: nstr(o.document_type) ?? undefined,
     vendor_name: str(o.vendor_name),
     vendor_near_account: nstr(o.vendor_near_account),
     invoice_number: str(o.invoice_number),
@@ -221,7 +259,7 @@ function e2eePreferred(): boolean {
 
 async function runReader(spec: ReaderSpec, pages: PageImage[]): Promise<ReaderResult> {
   const request = buildRequest(spec.model, pages, { boxes: spec.boxes });
-  const receipt: Receipt = { verified: false, signature_kind: null, completion_id: null, e2ee: false, e2ee_fallback_reason: null, error: null };
+  const receipt: Receipt = { verified: false, signature_kind: null, tee: false, completion_id: null, e2ee: false, e2ee_fallback_reason: null, error: null };
   const result: ReaderResult = { reader: spec.id, model: spec.model, extraction: null, error: null, receipt, timings_ms: { inference: 0, verification: 0 }, usage: null };
 
   const t0 = performance.now();
@@ -265,6 +303,7 @@ async function runReader(spec: ReaderSpec, pages: PageImage[]): Promise<ReaderRe
     const v = await used.verifyResponse(completion.id);
     receipt.verified = true;
     receipt.signature_kind = v.signatureKind;
+    receipt.tee = v.signatureKind === 'provider_tee';
   } catch (err) {
     receipt.error = describeError(err);
   }

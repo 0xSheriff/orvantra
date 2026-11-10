@@ -1,7 +1,12 @@
 import type { Boxes } from './boxes.ts';
 
+export type DocumentType = 'invoice' | 'credit_note' | 'receipt' | 'other';
+export const DOCUMENT_TYPES: readonly DocumentType[] = ['invoice', 'credit_note', 'receipt', 'other'];
+
 /** What one reader (model) returns, exactly as the strict JSON schema defines it. */
 export interface Extraction {
+  /** What kind of document this is; anything but "invoice" is never paid. Missing = the reader did not say. */
+  document_type?: string;
   /** Reader A only: normalized boxes of key regions on page 1 (UI overlays only, never used for decisions). */
   boxes?: Boxes | null;
   vendor_name: string;
@@ -17,6 +22,8 @@ export interface Extraction {
 
 /** An extraction after normalization. Amounts are integer base units (6 decimals). */
 export interface NormalizedInvoice {
+  /** null = the reader did not say (held). Credit-note signals in the printed text override "invoice". */
+  document_type: DocumentType | null;
   vendor_name: string;
   vendor_account: string | null;
   invoice_number: string;

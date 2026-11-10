@@ -135,7 +135,38 @@ export function relativeTime(ns: string, nowMs: number): string {
 export const SET_VENDOR_GAS = 30_000_000_000_000n;
 export const RELAY_METHODS = ['set_vendor', 'remove_vendor'] as const;
 /**
- * set_vendor / remove_vendor require EXACTLY 1 yoctoNEAR. Function-call access keys cannot attach deposits, so a
- * payout change always needs the vendor's full-access key (an explicit wallet confirmation).
+ * set_vendor needs at least 1 yoctoNEAR (plus the storage deposit for a new or growing entry, the excess is refunded);
+ * remove_vendor exactly 1. Function-call access keys cannot attach deposits, so a payout change always needs the
+ * vendor's full-access key (an explicit wallet confirmation).
  */
 export const REGISTRY_DEPOSIT = 1n;
+
+// ------------------------------------------------------------------ storage deposit (set_vendor)
+
+/** 0.01 NEAR always covers the largest possible entry (the registry refunds the excess). Used if the view fails. */
+export const FALLBACK_STORAGE_DEPOSIT = 10n ** 22n;
+/** Sizes (bytes) passed to the registry's `storage_cost_estimate`: a typical entry for the copy, the largest for the deposit. */
+export const TYPICAL_ENTRY_BYTES = { display_name_len: 20, address_len: 42, asset_len: 64 } as const;
+export const MAX_ENTRY_BYTES = { display_name_len: MAX_DISPLAY_NAME_CHARS * 4, address_len: MAX_ADDRESS_LEN, asset_len: MAX_ASSET_ID_LEN } as const;
+
+/** yoctoNEAR -> "0.0049" (rounded up to 4 decimals, at least 0.0001). */
+export function formatNear(yocto: bigint): string {
+  const unit = 10n ** 20n; // 0.0001 NEAR
+  const ticks = (yocto + unit - 1n) / unit || 1n;
+  const whole = ticks / 10_000n;
+  const frac = (ticks % 10_000n).toString().padStart(4, '0').replace(/0+$/, '');
+  return frac ? `${whole}.${frac}` : `${whole}`;
+}
+
+/** The sentence about the refundable deposit; `typical` is the registry's estimate for a typical entry (null = unknown). */
+export function depositSentence(typical: bigint | null): string {
+  const amount = typical == null ? 'a small refundable deposit' : `a small refundable deposit (≈${formatNear(typical)} NEAR)`;
+  return `New entries hold ${amount} that comes back if you remove your entry.`;
+}
+
+/** Vendor-facing line about fees, gasless or not. */
+export function feeSentence(gasless: boolean, typical: bigint | null): string {
+  return gasless
+    ? `Orvantra pays the network fee. ${depositSentence(typical)}`
+    : `You'll confirm once in your wallet and pay a tiny network fee (under 0.01 NEAR) plus the refundable deposit. ${depositSentence(typical)}`;
+}

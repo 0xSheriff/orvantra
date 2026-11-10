@@ -1,12 +1,19 @@
 // Pure planning for a payment proposal: which path, what quote to expect, exact propose_payment args. No I/O.
 import type { Decision } from './checks.ts';
+import { isInvoiceHash } from './hash.ts';
 import type { Payout, TreasuryConfig } from './near.ts';
 import { MAINNET_USDC_NEAR, type QuoteExpectation } from './oneclick.ts';
 
 export type PayPath = 'direct' | 'oneclick' | 'oneclick-simulated';
 
 export const SIMULATED_LABEL = 'SIMULATED 1Click deposit — testnet has no NEAR Intents';
-export const DEFAULT_SIM_DEPOSIT_ACCOUNT = 'orvantra-1click-sim.testnet';
+/**
+ * The treasury only pays a 64-hex implicit account as a deposit address, so the testnet stand-in is one too: the
+ * account of a dev key kept outside the repo (~/.orvantra/keys/testnet/sim.json, made by scripts/make-sim-key.mjs).
+ * Override with env SIM_DEPOSIT_ACCOUNT.
+ */
+export const DEFAULT_SIM_DEPOSIT_ACCOUNT = '8820697d2b4ba9c41055b0362c1318baa0b626304d8015547b4bb9a407560239';
+export const IMPLICIT_ACCOUNT = /^[0-9a-f]{64}$/;
 /** ORIGIN_CHAIN dry quotes need an existing mainnet refundTo; the testnet treasury does not exist on mainnet. */
 export const DEFAULT_SIM_QUOTE_REFUND_TO = 'intents.near';
 
@@ -86,8 +93,14 @@ export function buildProposeArgs(o: {
   quoteHash: string | null;
   invoiceNumber: string | null;
   flags: string[];
+  /** Dry runs on mainnet print a placeholder instead of the real deposit address; skip the shape check for it. */
+  depositPlaceholder?: boolean;
 }): ProposeArgs {
+  if (!isInvoiceHash(o.invoiceHash)) throw new Error(`invoice_hash must be 64 lowercase hex characters, got "${o.invoiceHash}"`);
   if (o.path !== 'direct' && !o.depositAddress) throw new Error('cross-chain payment needs a deposit address');
+  if (o.path !== 'direct' && o.depositAddress && !o.depositPlaceholder && !IMPLICIT_ACCOUNT.test(o.depositAddress)) {
+    throw new Error(`deposit address must be a 64-hex implicit account (the treasury rejects anything else), got "${o.depositAddress}"`);
+  }
   if (!/^\d+$/.test(o.amount) || BigInt(o.amount) <= 0n) throw new Error(`bad amount ${o.amount}`);
   return {
     invoice_hash: o.invoiceHash,
@@ -107,6 +120,9 @@ export function preflightProblems(o: { config: TreasuryConfig; signerId: string;
   const p: string[] = [];
   if (o.config.paused) p.push('treasury is paused');
   if (o.config.agent !== o.signerId) p.push(`treasury agent is ${o.config.agent}, but the key belongs to ${o.signerId}`);
+  if (o.config.cross_chain_auto_pay_threshold === undefined) {
+    p.push('treasury has no cross_chain_auto_pay_threshold (pre-v4 contract): cross-chain payouts could be paid without the owner — deploy orvantra-treasury-v4');
+  }
   if (o.config.storage_deposit === undefined) {
     p.push('treasury has no storage_deposit setting (pre-Day-5 contract): payouts to unregistered accounts would fail — deploy the new treasury');
   } else if (o.storageMin != null && BigInt(o.config.storage_deposit) < BigInt(o.storageMin)) {

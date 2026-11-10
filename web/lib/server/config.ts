@@ -5,6 +5,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import dotenv from 'dotenv';
 import { nearConfig, type NearConfig } from 'orvantra-agent/near';
+import { filterAgentEnv } from '../agentEnv';
 import { siteLinks, type SiteLinks } from '../links';
 
 export const REPO_ROOT = process.env.ORVANTRA_ROOT ?? resolve(process.cwd(), '..');
@@ -13,7 +14,7 @@ export const AGENT_DIR = resolve(REPO_ROOT, 'agent');
 const envFile = resolve(REPO_ROOT, '.env');
 if (existsSync(envFile)) dotenv.config({ path: envFile, quiet: true });
 
-export const DEFAULT_TREASURY = 'orvantra-treasury-v3.testnet';
+export const DEFAULT_TREASURY = 'orvantra-treasury-v4.testnet';
 export const DEFAULT_REGISTRY = 'orvantra-registry.testnet';
 
 export interface ServerConfig {
@@ -41,11 +42,11 @@ export function serverConfig(): ServerConfig {
   };
 }
 
-/** Env for the agent child process: same network/contracts as the web app. Secrets stay in its own .env load. */
-export function agentEnv(): NodeJS.ProcessEnv {
+/** Env for the agent child process: an explicit allowlist (lib/agentEnv.ts), plus the web app's network/contract ids. */
+export function agentEnv(): Record<string, string> {
   const c = serverConfig();
   return {
-    ...process.env,
+    ...filterAgentEnv(process.env),
     NEAR_NETWORK: c.network,
     TREASURY_ID: c.treasuryId,
     REGISTRY_ID: c.registryId,

@@ -133,7 +133,8 @@ describe('validateQuote — structural rules (signature stubbed so only the rule
 
   it('real quote: missing / non-NEAR deposit address, memo, expired quote deadline', () => {
     expect(real((q) => { delete q.quote.depositAddress; }).errors).toEqual(['real quote has no depositAddress']);
-    expect(real((q) => { q.quote.depositAddress = 'Not A NEAR Account!'; }).errors[0]).toMatch(/not a NEAR account id/);
+    expect(real((q) => { q.quote.depositAddress = 'Not A NEAR Account!'; }).errors[0]).toMatch(/64-hex NEAR implicit account/);
+    expect(real((q) => { q.quote.depositAddress = 'orvantra-1click-sim.testnet'; }).errors[0]).toMatch(/64-hex NEAR implicit account/);
     expect(real((q) => { q.quote.depositMemo = '123'; }).errors[0]).toMatch(/deposit memo/);
     expect(real((q) => { q.quote.deadline = new Date(AT.getTime() - 1).toISOString(); }).errors[0]).toMatch(/quote deadline .* has passed/);
   });

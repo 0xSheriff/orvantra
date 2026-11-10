@@ -36,11 +36,12 @@ the same mistake.
 - Both readers run on attested TEE deployments. The SDK (`@nearai/inference-sdk`) verifies the gateway and model
   attestation **before** sending the invoice, and encrypts the message content (including the image) to the
   attested model key (**E2EE**). E2EE with image content works for both readers (eval: `e2ee=on` for all 14
-  readings). If E2EE fails for a model, the agent retries without it and records the reason in the receipt
-  (`e2ee_fallback_reason`). `NEARAI_E2EE=0` forces plaintext mode (signatures are still verified); this switch
+  readings). If E2EE fails for a model, the agent retries without it, records the reason in the receipt
+  (`e2ee_fallback_reason`) and **holds the invoice** ("end-to-end encryption failed for reader X ..."). `NEARAI_E2EE=0` forces plaintext mode (signatures are still verified); this switch
   has not been exercised in the eval.
 - After each answer, `verifyResponse(id)` checks the response signature against the exact request and response
-  bytes. The receipt records `signature_kind` (`provider_tee` = signed inside the model TEE). **If verification
+  bytes. The receipt records `signature_kind` (`provider_tee` = signed inside the model TEE; `gateway` = signed by the attested gateway only: it counts
+  as verified but not as TEE, and the review screen says so; `tee` is stored per reader). **If verification
   fails or is unavailable, the reading is marked unverified and the decision is `hold`**. The agent never claims
   a reading is verified when it is not.
 - The `.env` file is read at runtime only (`dotenv`) and its values are never printed.
@@ -57,7 +58,8 @@ Optional environment variables: `NEAR_NETWORK` (default `testnet`), `NEAR_RPC_UR
 with failover; default testnet `https://test.rpc.fastnear.com,https://rpc.testnet.near.org`, mainnet
 `https://free.rpc.fastnear.com,https://rpc.mainnet.near.org`; legacy single `NEAR_RPC_URL` also accepted),
 `NEAR_VIEW_CACHE_MS` (identical view calls within this window share one request, default `30000`, `0` disables), `REGISTRY_ID` (default `orvantra-registry.testnet`), `TREASURY_ID`
-(default `orvantra-treasury.testnet`), `READER_A_MODEL`, `READER_B_MODEL`, `NEARAI_E2EE=0`.
+(default `orvantra-treasury-v4.testnet`), `READER_A_MODEL`, `READER_B_MODEL` (the two must be different models: the agent
+refuses to start otherwise), `NEARAI_E2EE=0`.
 
 ## Commands
 | Command | What it does | Network |
@@ -87,9 +89,15 @@ with failover; default testnet `https://test.rpc.fastnear.com,https://rpc.testne
 ## Decision rules (`src/checks.ts`, pure and unit-tested)
 **reject**: no vendor NEAR account on the invoice (or invalid id) · vendor not in the registry · vendor not approved
 in the treasury policy · `invoice_hash` already used on-chain (or earlier in the same batch) · currency not USDC/USD ·
-total ≤ 0 · amount > vendor `max_per_invoice`.
+total ≤ 0 · amount > vendor `max_per_invoice` · the document is not an invoice: the readers' `document_type` is
+`credit_note`, `receipt` or `other`, or credit-note signs are printed (a minus or Unicode minus, parentheses, a trailing
+`-`, `CR`, the words credit / credit note / refund in the total or the invoice number).
 
-**hold**: readers disagree on a critical field · a reader's response could not be verified · the invoice's
+**hold**: the invoice names a different business than the registry `display_name` (token-set match, case- and
+diacritics-insensitive, legal forms like Ltd/GmbH ignored: "invoice says X, but <account> is registered as Y") · the same
+vendor + normalized invoice number (NFKC, alphanumeric, leading zeros stripped) as an on-chain payment memo or a ledger
+entry, whatever the amount ("possible duplicate of N (status)") · no payment text AND no line items (nothing to check it
+against) · the document type could not be read · a reading fell back to plaintext (no E2EE) · readers disagree on a critical field · a reader's response could not be verified · the invoice's
 payment text names an address that is not the registry payout (or contains bank details) · line items don't sum to
 the total (or a line is unreadable) · amount > 3× the vendor's median **Paid** amount · total/invoice number unreadable ·
 NEAR state could not be read.
@@ -102,16 +110,22 @@ Pending · vendor/treasury monthly cap would be exceeded → contract rejects ·
 
 **Payout** always comes from the registry (`chain`, `asset_id`, `address`, `version`). The invoice never supplies it.
 
+The payment-text scan is case-insensitive for `0x`, strips zero-width characters, joins spaces and newlines inside a hex run
+and reads `(dot) near` / ` dot near` as `.near`. PDFs: at most 2 pages, and a page that would render larger than 5000×5000
+px (at scale 2) is refused before it is rendered.
+
 **invoice_hash** = `sha256_hex("<vendor_account>|<invoice_number_normalized>|<amount_base_units>|<currency>")`.
 Account is lowercased, invoice number uppercased without whitespace or a leading `#`/`No.`, amount in 6-decimal
 base units, and `USD` is hashed as `USDC` (the settlement currency). Re-sending the same invoice in a different
 template gives the same hash.
 
 ### Amount parsing
-`1,200.00`, `$1200`, `USDC 120.5`, `1.200,00`, `1 200,00` → base units. If both `,` and `.` appear, the last one is
+`1,200.00`, `$1200`, `USDC 120.5`, `1.200,00`, `1 200,00` → base units. Credit-note notations (`−120`, `(120.00)`, `120.00-`, `120.00 CR`) are negative, so they
+are rejected. If both `,` and `.` appear, the last one is
 the decimal separator. A single `,` followed by 1–2 digits is a decimal comma, and followed by 3 digits it is a
-thousands separator. A single `.` is always a decimal point (`1.200` = 1.2). Anything ambiguous or malformed
-returns null and leads to a hold.
+thousands separator. A single `.` is a decimal point, except the ambiguous shape of 1–3 digits, a dot and exactly three
+digits (`1.200`: European thousands or US decimals?), which returns null. Anything ambiguous or malformed returns null and
+leads to a hold.
 
 ## Paying (Day 5)
 
@@ -134,13 +148,13 @@ treasury.propose_payment(invoice_hash, vendor, amount, payout_version, deposit_a
 the owner's own wallet. The agent can only add `agent_flags`, which make the contract hold a payment, never pay it.
 
 ### The agent key
-`npm run setup-agent-key -- --account orvantra-agent.testnet --contract orvantra-treasury-v2.testnet` writes a new
+`npm run setup-agent-key -- --account orvantra-agent.testnet --contract orvantra-treasury-v4.testnet` writes a new
 ed25519 key to `~/.orvantra/keys/testnet/orvantra-agent.testnet.json` (dir 700, file 600, outside the repo; the
 private key is never printed) and prints:
 ```
 near account add-key orvantra-agent.testnet \
   grant-function-call-access --allowance '0.25 NEAR' \
-  --contract-account-id orvantra-treasury-v2.testnet --function-names 'propose_payment' \
+  --contract-account-id orvantra-treasury-v4.testnet --function-names 'propose_payment' \
   use-manually-provided-public-key ed25519:… \
   network-config testnet sign-with-legacy-keychain send
 ```
@@ -158,7 +172,9 @@ that decides where money goes is checked against the treasury config and the **r
 `quote.amountIn` = invoice amount (`EXACT_INPUT`) · `refundTo` = treasury · `depositType`/`refundType` = `ORIGIN_CHAIN`,
 `recipientType` = `DESTINATION_CHAIN` · request deadline (and quote deadline) in the future · real quotes:
 `depositAddress` present, a NEAR account id, no `depositMemo` · no `customRecipientMsg` / virtual-chain recipients ·
-USD out ≥ 97% of USD in. `quote_hash` stored on-chain = the SDK's `quoteHash` = base58(sha256(signed payload)), the
+USD out ≥ 97% of USD in (the USD values must be present) · `slippageTolerance` equals what we requested ·
+`minAmountOut` ≥ `amountOut` × (1 − slippage) · the recipient matches exactly (EVM addresses without case) · real quotes: a
+`deadline` at least 30 minutes ahead and a 64-hex deposit address (the only kind the treasury pays). `quote_hash` stored on-chain = the SDK's `quoteHash` = base58(sha256(signed payload)), the
 exact message 1Click signed, so anyone can re-verify the stored quote.
 
 **Finding (2026-11-06):** an `ORIGIN_CHAIN` quote whose `refundTo` is not an existing **mainnet** account gets an opaque
@@ -166,8 +182,9 @@ exact message 1Click signed, so anyone can re-verify the stored quote.
 `SIM_QUOTE_REFUND_TO` (default `intents.near`) as refundTo of the dry quote. Dry quotes move no funds.
 
 ### Environment (Day 5)
-`TREASURY_ID` (use `orvantra-treasury-v2.testnet` for the Day 5 contract), `AGENT_ID` (default: the treasury's
-configured agent), `SIM_DEPOSIT_ACCOUNT` (default `orvantra-1click-sim.testnet`), `SIM_QUOTE_REFUND_TO`
+`TREASURY_ID` (default `orvantra-treasury-v4.testnet`), `AGENT_ID` (default: the treasury's configured agent),
+`SIM_DEPOSIT_ACCOUNT` (a 64-hex implicit account, because the treasury rejects named deposit accounts; default: the
+account of the dev key in `~/.orvantra/keys/testnet/sim.json`, made by `node scripts/make-sim-key.mjs`), `SIM_QUOTE_REFUND_TO`
 (default `intents.near`), `PROPOSE_GAS_TGAS` (default 150), `ONECLICK_JWT` (optional, never printed),
 `ONECLICK_BASE`, `ORVANTRA_KEYS_DIR`, `ORVANTRA_LEDGER` (default `agent/data/ledger.json`, gitignored).
 
@@ -215,7 +232,7 @@ the duplicate hash anyway; this saves the key's allowance).
   registry-only payout and the contract caps limit what that can cost.
 - The payment-text scan uses patterns (EVM, NEAR, base58, bech32, IBAN/bank words). It is meant to catch redirect
   attempts and may hold some harmless invoices.
-- Testnet cross-chain payouts are **simulated**: tUSDC goes to `orvantra-1click-sim.testnet`, not into NEAR Intents.
+- Testnet cross-chain payouts are **simulated**: tUSDC goes to the 64-hex stand-in account (`SIM_DEPOSIT_ACCOUNT`), not into NEAR Intents.
   Only the price + signature of the (dry, mainnet) quote are real. Real deposit addresses come from mainnet quotes.
 - A mainnet payment that waits for the owner keeps the quote's deposit address; if the owner approves after the
   quote deadline, 1Click refunds the deposit to the treasury. Track it with `npm run oneclick-status`.
@@ -231,7 +248,8 @@ wallet. A hijacked Telegram account cannot move money.
 
 1. In Telegram, open @BotFather, send `/newbot`, and put the token in the repo-root `.env` as `TELEGRAM_BOT_TOKEN`.
 2. Open your bot and press **Start**, then run `npm run notifier -- --link` → it prints your chat id (and replies to
-   you in Telegram). Put it in `.env` as `TELEGRAM_CHAT_ID`.
+   you in Telegram). Put it in `.env` as `TELEGRAM_CHAT_ID`. Once it is set, `--link` only answers that chat: nobody else
+   who finds the bot gets a reply or learns a chat id.
 3. `npm run notifier -- --test` → you receive one sample "Held for you" message.
 4. `npm run notifier` (keep it running next to the web app) → on its first run it records the current state
    silently; after that each change produces exactly one message. Set `ORVANTRA_APP_URL` so the

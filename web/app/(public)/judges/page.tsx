@@ -59,7 +59,7 @@ export default function Judges() {
         <div className="mid">
           <h2 className="lbl">Do this <span className="ar">→</span> see that</h2>
           <ol className="steps checks">
-            <li><span>Open the app and connect a {network} wallet<small><Ar />owner view; approving needs the treasury owner</small></span></li>
+            <li><span>Open the app and connect a {network} wallet<small><Ar />owner view; approving needs the treasury owner. Uploads are public on this demo.</small></span></li>
             <li><span>Upload <M>04-acme-changed-bank.png</M><small><Ar />held: &quot;This invoice asks you to pay someone else&quot;</small></span></li>
             <li><span>Upload <M>03-bob-small.png</M><small><Ar />paid automatically, direct to bob on NEAR</small></span></li>
             <li><span>Upload the same invoice again<small><Ar />stopped as a duplicate, nothing sent</small></span></li>

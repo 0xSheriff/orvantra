@@ -20,8 +20,10 @@ AGENT=orvantra-agent.testnet             # the agent account; it will sign ONLY 
 # Treasury with the 2026-11-08 security fixes (new state layout): deploy to a FRESH account.
 TREASURY=${TREASURY:-orvantra-treasury-v4.testnet}
 # Stand-in for the 1Click deposit address (testnet has no NEAR Intents). The treasury only pays cross-chain to a
-# 64-hex implicit account, like real 1Click deposit addresses; this one is sha256("orvantra-1click-sim").
-SIM=${SIM:-$(python3 -c "import hashlib; print(hashlib.sha256(b'orvantra-1click-sim').hexdigest())")}
+# 64-hex implicit account, like real 1Click deposit addresses: the account of the dev key in
+# ~/.orvantra/keys/testnet/sim.json (agent/scripts/make-sim-key.mjs); same default as DEFAULT_SIM_DEPOSIT_ACCOUNT
+# in agent/src/plan.ts, so tUSDC sent there can be moved again with that key.
+SIM=${SIM:-8820697d2b4ba9c41055b0362c1318baa0b626304d8015547b4bb9a407560239}
 TOKEN=orvantra-tusdc.testnet             # test token (tUSDC, 6 decimals)
 REGISTRY=orvantra-registry.testnet       # vendor registry
 ACME=orvantra-acme.testnet               # payout: USDC on Base  -> cross-chain path (simulated on testnet)

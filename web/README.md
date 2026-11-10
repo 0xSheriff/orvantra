@@ -33,13 +33,43 @@ Two public pages sit outside the app (no sidebar), from `design/final-home-v2.ht
   contract method is not payable). If the connected account is not the treasury owner, the buttons are disabled
   and a sentence says who can approve. After signing, the page polls `/api/payments/<id>` until Paid / Rejected /
   Failed and then opens the settled record. **The server never signs owner actions.**
+- **Names**: vendors are shown by their **registry** display name first; the name printed on the invoice comes second
+  ("· invoice says …" in the list). The agent holds an invoice whose name does not match the registry.
+- **Cross-chain evidence**: the treasury holds every cross-chain payout for the owner (`cross_chain_auto_pay_threshold`),
+  because it cannot check the 1Click deposit address on-chain. The review screen therefore adds three numbered
+  findings (`lib/evidence.ts`): quote signed by 1Click (yes/no) with its `quote_hash`; the quote delivers to the registry
+  address (yes/no); the deposit address the treasury will pay, whether it equals the quote's, and the quote deadline. With
+  no agent record (payment proposed outside the web app) nothing is "confirmed" and the screen says not to approve blind.
+- **Allow this invoice number again**: on a Rejected/Failed payment whose hash is still held, the owner can sign
+  `release_invoice_hash({id})` (1 yoctoNEAR, `components/ReleasePanel.tsx`) so a genuine invoice burned by a forged copy
+  can be proposed again.
 - **Relay** (`POST /api/relay`, `lib/relay.ts` + `lib/server/relayer.ts`): decodes the borsh SignedDelegate and only
-  sponsors it if the receiver is the registry, it is exactly one FunctionCall to `set_vendor` or `remove_vendor`, with
-  exactly 1 yoctoNEAR attached (the registry requires it; it comes from the vendor's balance, and because
-  function-call access keys cannot attach deposits the vendor must confirm with a full-access key), at most 30 TGas, not past `max_block_height`, with a valid signature, and the sender has made fewer than
-  5 relayed changes in the last hour (in memory). The relayer then sends a transaction with a `SignedDelegate` action
-  and waits for the final outcome. The registry checks `predecessor_account_id`, which stays the vendor, so the relayer
-  can only ever touch the signer's own entry. Refused on mainnet unless `ORVANTRA_ALLOW_MAINNET_RELAY=1`.
+  sponsors it if the receiver is the registry, it is exactly one FunctionCall to `set_vendor` or `remove_vendor`, at
+  most 30 TGas, valid signature, not past `max_block_height` and not valid for more than 1000 blocks. Deposits come
+  from the **vendor's** balance, not the relayer's: `set_vendor` may attach 1 yocto up to the registry's
+  `storage_cost_estimate` (largest entry) + 0.001 NEAR, never more than 0.05 NEAR; `remove_vendor` exactly 1 yocto.
+  Before signing, the relayer asks the chain: the sender account exists, the signing key is a **full-access** key of
+  it (function-call keys cannot attach deposits), and the delegate nonce is above the key's current nonce. Limits
+  (in memory, pruned): 5 per sender / hour, 10 per client IP / hour (first `x-forwarded-for` hop, set by Railway),
+  60 per hour overall. It refuses with a plain message when its own balance is under 1 NEAR (cached 60 s). The relayer
+  then sends a transaction with a `SignedDelegate` action and waits for the final outcome. The registry checks
+  `predecessor_account_id`, which stays the vendor, so the relayer can only ever touch the signer's own entry.
+  Refused on mainnet unless `ORVANTRA_ALLOW_MAINNET_RELAY=1`.
+- **Vendor deposit**: both paths (gasless and normal transaction) attach the registry's storage deposit (view
+  `storage_cost_estimate`, cached 10 min; the registry keeps what the entry costs and refunds the rest, and refunds the
+  entry's storage when the vendor removes it). The copy on `/register` quotes the estimate for a typical entry
+  (`≈0.0049 NEAR`); if the view fails it says "a small refundable deposit" and attaches 0.01 NEAR.
+- **Upload limits** (`POST /api/upload`, `lib/uploadLimits.ts`): refused by `content-length` above 10 MB before the
+  body is read, with a byte cap as a fallback; 5 uploads per IP per hour and 40 per 24 h overall; one agent run at a
+  time plus one waiting; the agent child is killed when the browser disconnects (and after 5 minutes); in execute
+  mode no more than `ORVANTRA_MAX_PROPOSALS_PER_DAY` (default 20) on-chain proposals per UTC day, counted from the
+  agent ledger (the refusal is a plain sentence, never a silent downgrade). Stored uploads: the newest 300 and nothing
+  older than 21 days (`lib/server/retention.ts`; the ledger stays). The agent child gets only an allowlist of
+  environment variables (`lib/agentEnv.ts`): never `TELEGRAM_*` or `RELAYER_*`.
+- **Headers** (`next.config.mjs` → `lib/securityHeaders.mjs`): CSP (`frame-ancestors 'none'`, `default-src 'self'`,
+  `connect-src` limited to this site, NEAR RPC and the three wallets), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy: strict-origin-when-cross-origin`, HSTS, `X-Frame-Options: DENY`. Extra https RPC origins from
+  `NEAR_RPC_URLS` are added at build time. API routes return generic error sentences; details go to the server log.
   `npm run relay-selftest -- http://localhost:3000` checks it end to end on testnet (bob re-saves his current entry).
   Note: the installed selector wallets (v10) do not implement `signDelegateActions` yet, so in the browser the page
   currently falls back to the paid transaction and says so.
@@ -58,7 +88,8 @@ row merging, formatting). `npm run lint` runs ESLint.
 | Env (server) | Default | |
 |---|---|---|
 | `NEAR_NETWORK` | `testnet` | |
-| `TREASURY_ID` | `orvantra-treasury-v2.testnet` | |
+| `TREASURY_ID` | `orvantra-treasury-v4.testnet` | |
+| `ORVANTRA_MAX_PROPOSALS_PER_DAY` | `20` | on-chain proposals the demo accepts per UTC day (execute mode) |
 | `REGISTRY_ID` | `orvantra-registry.testnet` | |
 | `TOKEN_ID` | the treasury's `token` | |
 | `ORVANTRA_UPLOAD_MODE` | `execute` | `dry-run` or `analyze` makes uploads read-only (nothing proposed) |
@@ -102,4 +133,7 @@ row merging, formatting). `npm run lint` runs ESLint.
 - Region boxes come from reader A (Qwen3-VL), are drawn on page 1 only, and are never used for a decision. Invalid or
   missing boxes mean no overlays; the findings stay numbered on the right.
 - Testnet cross-chain payouts are simulated (see `agent/README.md`). The panel says "simulated 1Click deposit on testnet".
-- One upload runs at a time per server process.
+- One upload runs at a time per server process (one more may wait). Limiter state is in memory: it resets on restart
+  and is per process.
+- Uploads are public: anyone can upload, and what they upload is shown in the app. The note "Uploads are public on this
+  demo." is next to every Upload button.

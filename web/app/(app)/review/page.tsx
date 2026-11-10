@@ -19,7 +19,7 @@ export default async function NeedsApproval({ searchParams }: { searchParams: Pr
         <div className="ph">
           <div>
             <h1>Nothing needs your approval</h1>
-            <p>Payments the treasury holds for you will appear here, one at a time.</p>
+            <p>Payments the treasury holds for you will appear here, one at a time. Uploads are public on this demo.</p>
           </div>
           <UploadButton />
         </div>

@@ -117,6 +117,15 @@ export function fixtureExists(cfg: ServerConfig, name: string | null): boolean {
   return existsSync(cfg.fixturesDir) && readdirSync(cfg.fixturesDir).includes(name);
 }
 
+/** Does the treasury still hold this invoice hash (so the same invoice cannot be proposed again)? Fresh read. */
+export async function readHashHeld(hash: string): Promise<boolean | null> {
+  try {
+    return await nearViews.isInvoiceUsed(near(true), hash);
+  } catch {
+    return null;
+  }
+}
+
 /** Fresh read of one payment (no view cache), for polling after the owner signs. */
 export async function readPayment(id: number): Promise<Payment | null> {
   return nearViews.getPayment(near(true), id);

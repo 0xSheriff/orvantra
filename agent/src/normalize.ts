@@ -1,27 +1,38 @@
-import type { Extraction, NormalizedInvoice } from './types.ts';
+import { DOCUMENT_TYPES, type DocumentType, type Extraction, type NormalizedInvoice } from './types.ts';
 
 export const DECIMALS = 6;
+
+/** Characters that mean "minus" on a printed document (Unicode minus, dashes). */
+const MINUS_CHARS = /[\u2212\u2012\u2013\u2014\u2010\u2011\uFE63\uFF0D]/g;
+const CREDIT_WORDS = /\b(credit|refund(?:ed)?)\b/i;
 
 /**
  * Parse a printed money amount into integer base units (default 6 decimals).
  * Accepts "1,200.00", "$1200", "USDC 120.5", "1.200,00", "1 200,00", "-5.00".
+ * Credit-note notations are NEGATIVE (so the checks reject them): a Unicode minus or dash, "(120.00)", a trailing
+ * minus "120.00-", "120.00 CR", and the words credit / credit note / refund.
  * Separator rules:
  *  - both "," and "." present: the one that appears last is the decimal separator;
  *  - only one kind, appearing several times: thousands separators;
  *  - a single ",": decimal if followed by 1-2 digits ("12,50"), thousands if followed by 3 ("1,200");
- *  - a single ".": always decimal ("1.200" = 1.2, the USD convention).
+ *  - a single ".": decimal, except the ambiguous "1.200" shape (1-3 digits not starting with 0, a dot, exactly 3
+ *    digits: European thousands or US decimals?), which returns null so a person looks at it.
  * Returns null when the text is not a clean number or has more fractional digits than `decimals`.
  */
 export function parseAmount(text: string | null | undefined, decimals = DECIMALS): bigint | null {
   if (text == null) return null;
-  let s = text.trim().replace(/[\s  ']/g, '');
-  // Strip currency words/symbols at either end.
-  s = s.replace(/^[^\d.,\-]+/, '').replace(/[^\d.,]+$/, '');
-  let negative = false;
+  const raw = text.normalize('NFKC');
+  let negative = CREDIT_WORDS.test(raw) || /(^|[\d\s])CR\.?\s*$/i.test(raw) || /\([^()]*\d[^()]*\)/.test(raw);
+  let s = raw.replace(/[\s\u00A0\u202F'\u200B-\u200F\u2060\uFEFF()]/g, '').replace(MINUS_CHARS, '-');
+  // Strip currency words/symbols at either end; a leading or trailing minus marks a negative amount.
+  s = s.replace(/^[^\d.,\-]+/, '');
   if (s.startsWith('-')) {
     negative = true;
     s = s.slice(1).replace(/^[^\d.,]+/, '');
   }
+  const tail = s.match(/[^\d.,]+$/);
+  if (tail?.[0].includes('-')) negative = true;
+  s = s.replace(/[^\d.,]+$/, '');
   if (!/^[\d.,]+$/.test(s) || !/\d/.test(s)) return null;
 
   const lastComma = s.lastIndexOf(',');
@@ -36,6 +47,7 @@ export function parseAmount(text: string | null | undefined, decimals = DECIMALS
   } else if (lastDot >= 0) {
     const count = s.split('.').length - 1;
     decimalSep = count === 1 ? '.' : null;
+    if (count === 1 && /^[1-9]\d{0,2}\.\d{3}$/.test(s)) return null; // "1.200": ambiguous
   }
 
   let intPart = s;
@@ -141,16 +153,31 @@ export function normalizeInvoiceNumber(text: string | null | undefined): string 
     .replace(/\s+/g, '');
 }
 
+const CREDIT_NOTE_TEXT = /credit|refund/i;
+
+/**
+ * The reader's document_type, with credit-note signals overriding "invoice" (or a missing type): credit / refund
+ * words in the invoice number or total, or a negative total. null = the reader did not say what this is.
+ */
+export function documentTypeOf(e: Extraction, amount: bigint | null): DocumentType | null {
+  const t = (e.document_type ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const declared: DocumentType | null = (DOCUMENT_TYPES as readonly string[]).includes(t) ? (t as DocumentType) : t ? 'other' : null;
+  const creditSignal = CREDIT_NOTE_TEXT.test(e.invoice_number.normalize('NFKC')) || CREDIT_NOTE_TEXT.test(e.total.normalize('NFKC')) || (amount != null && amount < 0n);
+  return creditSignal && (declared === 'invoice' || declared === null) ? 'credit_note' : declared;
+}
+
 export function normalizeExtraction(e: Extraction): NormalizedInvoice {
   const text = e.payment_instructions_text?.trim();
+  const amount = parseAmount(e.total);
   return {
+    document_type: documentTypeOf(e, amount),
     vendor_name: e.vendor_name.trim(),
     vendor_account: normalizeAccount(e.vendor_near_account),
     invoice_number: normalizeInvoiceNumber(e.invoice_number),
     issue_date: normalizeDate(e.issue_date),
     due_date: normalizeDate(e.due_date),
     currency: normalizeCurrency(e.currency),
-    amount_base_units: parseAmount(e.total),
+    amount_base_units: amount,
     line_items: e.line_items.map((li) => ({
       description: li.description.trim(),
       amount_base_units: parseAmount(li.amount),

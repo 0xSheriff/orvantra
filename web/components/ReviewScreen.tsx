@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import type { ReviewView } from '@/lib/server/review';
 import type { Segment } from '@/lib/verdict';
 import { ApprovePanel } from './ApprovePanel';
+import { ReleasePanel } from './ReleasePanel';
 
 function Rich({ segs }: { segs: Segment[] }) {
   return (
@@ -108,6 +109,7 @@ export function ReviewScreen({ v, crumbs, actions, interactive }: { v: ReviewVie
             ) : (
               <StaticPanel v={v} />
             )}
+            {v.release ? <ReleasePanel paymentId={v.release.paymentId} owner={v.owner} /> : null}
           </div>
           <p className="foot">
             {pending

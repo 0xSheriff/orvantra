@@ -10,6 +10,7 @@ import { readLedger, defaultLedgerPath } from '../ledger.ts';
 import { unitFor } from '../format.ts';
 import { telegramClient, sendMessage, type TelegramClient } from './telegram.ts';
 import { paymentAlert, stoppedAlert, type MessageCtx } from './messages.ts';
+import { linkableChats } from './link.ts';
 import { loadState, saveState, diff, remember, agentStopped } from './state.ts';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -44,11 +45,15 @@ async function link(client: TelegramClient) {
     const m = u.message;
     if (m && m.text?.startsWith('/start')) chats.set(m.chat.id, m.chat.username ? `@${m.chat.username}` : m.chat.first_name ?? '');
   }
-  if (!chats.size) {
-    console.log('No /start found yet. Open your bot in Telegram, press Start (or send /start), then run this again.');
+  const configured = process.env.TELEGRAM_CHAT_ID;
+  const targets = linkableChats(chats, configured);
+  if (!targets.size) {
+    console.log(configured?.trim()
+      ? 'TELEGRAM_CHAT_ID is already set; only that chat is answered. Press Start in that chat, then run this again.'
+      : 'No /start found yet. Open your bot in Telegram, press Start (or send /start), then run this again.');
     return;
   }
-  for (const [id, who] of chats) {
+  for (const [id, who] of targets) {
     console.log(`chat id ${id}  ${who}`);
     await sendMessage(client, String(id), `Orvantra alerts are almost set up — your chat id is <code>${id}</code>. Add it to .env as TELEGRAM_CHAT_ID.`);
   }
@@ -59,7 +64,7 @@ async function test(client: TelegramClient, chatId: string) {
   const cfg = nearConfig();
   const payments = await getPayments(cfg);
   const ctx = await buildCtx(cfg, payments);
-  const p: Payment = payments.filter((x) => x.status === 'Pending').at(-1) ?? payments.find((x) => (x.agent_flags ?? []).length) ?? {
+  const p: Payment = payments.filter((x) => x.status === 'Pending').at(-1) ?? payments.find((x) => x.reasons.some((r) => r.startsWith('agent: '))) ?? {
     id: 0, invoice_hash: 'sample', vendor: 'acme.near', amount: '80000000', payout_version: 2, status: 'Pending',
     reasons: ['agent: invoice asks to pay a different address — ignored; registry is the source of truth (invoice says: 0x9999999999999999999999999999999999999999)'],
     direct: false, destination: null, created_at: '0', memo: 'INV-2026-0150',

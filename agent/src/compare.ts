@@ -1,5 +1,5 @@
 import { formatAmount } from './normalize.ts';
-import type { NormalizedInvoice } from './types.ts';
+import type { DocumentType, NormalizedInvoice } from './types.ts';
 
 export const CRITICAL_FIELDS = ['vendor_account', 'invoice_number', 'amount_base_units', 'currency', 'due_date'] as const;
 export type CriticalField = (typeof CRITICAL_FIELDS)[number];
@@ -47,7 +47,18 @@ export function compareReadings(a: NormalizedInvoice | null, b: NormalizedInvoic
     if (a[field] !== b[field]) mismatches.push({ field, a: show(field, a), b: show(field, b) });
   }
   const reasons = mismatches.map((m) => `readers disagree on ${LABEL[m.field]}: A=${m.a}, B=${m.b}`);
-  return { agree: mismatches.length === 0, mismatches, reasons, agreed: { ...a, payment_instructions_text: mergeText(a.payment_instructions_text, b.payment_instructions_text) } };
+  return {
+    agree: mismatches.length === 0,
+    mismatches,
+    reasons,
+    agreed: { ...a, document_type: mergeDocumentType(a.document_type, b.document_type), payment_instructions_text: mergeText(a.payment_instructions_text, b.payment_instructions_text) },
+  };
+}
+
+/** If either reader says it is not an invoice (credit note first), it is not; a reader that did not say makes it unknown. */
+function mergeDocumentType(a: DocumentType | null, b: DocumentType | null): DocumentType | null {
+  for (const t of ['credit_note', 'receipt', 'other'] as const) if (a === t || b === t) return t;
+  return a === 'invoice' && b === 'invoice' ? 'invoice' : null;
 }
 
 function mergeText(a: string | null, b: string | null): string | null {

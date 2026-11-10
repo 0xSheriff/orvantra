@@ -4,7 +4,7 @@ import type { Decision } from '../src/checks.ts';
 import type { TreasuryConfig } from '../src/near.ts';
 import { MAINNET_USDC_NEAR } from '../src/oneclick.ts';
 import {
-  agentFlags, buildProposeArgs, DEFAULT_SIM_QUOTE_REFUND_TO, memoFor, preflightProblems, quoteExpectation, selectPath,
+  agentFlags, buildProposeArgs, DEFAULT_SIM_DEPOSIT_ACCOUNT, DEFAULT_SIM_QUOTE_REFUND_TO, memoFor, preflightProblems, quoteExpectation, selectPath,
 } from '../src/plan.ts';
 
 const TOKEN = 'orvantra-tusdc.testnet';
@@ -70,9 +70,9 @@ describe('agentFlags (Day-4 holds -> on-chain agent_flags)', () => {
 describe('buildProposeArgs', () => {
   const common = { invoiceHash: 'ab'.repeat(32), vendor: 'orvantra-acme.testnet', amount: '120000000', payoutVersion: 2, invoiceNumber: 'INV-2026-0142', flags: [] };
   it('cross-chain: deposit address + quote hash + memo, no flags => null', () => {
-    expect(buildProposeArgs({ ...common, path: 'oneclick-simulated', depositAddress: 'orvantra-1click-sim.testnet', quoteHash: 'QH' })).toEqual({
+    expect(buildProposeArgs({ ...common, path: 'oneclick-simulated', depositAddress: DEFAULT_SIM_DEPOSIT_ACCOUNT, quoteHash: 'QH' })).toEqual({
       invoice_hash: 'ab'.repeat(32), vendor: 'orvantra-acme.testnet', amount: '120000000', payout_version: 2,
-      deposit_address: 'orvantra-1click-sim.testnet', quote_hash: 'QH', memo: 'INV-2026-0142', agent_flags: null,
+      deposit_address: DEFAULT_SIM_DEPOSIT_ACCOUNT, quote_hash: 'QH', memo: 'INV-2026-0142', agent_flags: null,
     });
   });
   it('direct: never sends a deposit address or quote hash', () => {
@@ -84,6 +84,19 @@ describe('buildProposeArgs', () => {
     expect(() => buildProposeArgs({ ...common, amount: '0', path: 'direct', depositAddress: null, quoteHash: null })).toThrow(/bad amount/);
     expect(() => buildProposeArgs({ ...common, amount: '1.5', path: 'direct', depositAddress: null, quoteHash: null })).toThrow(/bad amount/);
   });
+  it('the simulated deposit account is a 64-hex implicit account (the treasury rejects named accounts)', () => {
+    expect(DEFAULT_SIM_DEPOSIT_ACCOUNT).toMatch(/^[0-9a-f]{64}$/);
+  });
+  it('refuses a deposit address that is not a 64-hex implicit account', () => {
+    for (const bad of ['orvantra-1click-sim.testnet', 'AB'.repeat(32), 'ab'.repeat(31)]) {
+      expect(() => buildProposeArgs({ ...common, path: 'oneclick', depositAddress: bad, quoteHash: 'QH' })).toThrow(/64-hex implicit/);
+    }
+  });
+  it('asserts invoice_hash is 64 lowercase hex', () => {
+    for (const bad of ['h1', 'AB'.repeat(32), 'ab'.repeat(31), '']) {
+      expect(() => buildProposeArgs({ ...common, invoiceHash: bad, path: 'direct', depositAddress: null, quoteHash: null })).toThrow(/64 lowercase hex/);
+    }
+  });
   it('memo is bounded to 256 bytes', () => {
     expect(memoFor(null)).toBeNull();
     expect(Buffer.byteLength(memoFor('€'.repeat(200))!, 'utf8')).toBeLessThanOrEqual(256);
@@ -93,12 +106,14 @@ describe('buildProposeArgs', () => {
 describe('preflightProblems', () => {
   const config: TreasuryConfig = {
     owner: 'o.testnet', agent: 'orvantra-agent.testnet', registry: 'r.testnet', token: TOKEN, auto_pay_threshold: '1', monthly_cap: '1',
-    min_payout_age_sec: 0, storage_deposit: '1250000000000000000000', paused: false, payment_count: 0,
+    min_payout_age_sec: 0, storage_deposit: '1250000000000000000000', cross_chain_auto_pay_threshold: '0', paused: false, payment_count: 0,
   };
   it('ok', () => expect(preflightProblems({ config, signerId: 'orvantra-agent.testnet', storageMin: '1250000000000000000000' })).toEqual([]));
   it('paused, wrong signer, storage deposit below token minimum, pre-Day-5 treasury', () => {
     expect(preflightProblems({ config: { ...config, paused: true }, signerId: 'x.testnet', storageMin: '2250000000000000000000' })).toHaveLength(3);
     const { storage_deposit: _, ...old } = config;
     expect(preflightProblems({ config: old, signerId: config.agent, storageMin: null })[0]).toMatch(/pre-Day-5/);
+    const { cross_chain_auto_pay_threshold: __, ...v3 } = config;
+    expect(preflightProblems({ config: v3, signerId: config.agent, storageMin: null })[0]).toMatch(/pre-v4/);
   });
 });

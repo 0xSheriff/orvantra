@@ -9,14 +9,16 @@ import { cap, fmtAmount, fmtDuration, shortAddr, chainLabel } from './format.ts'
 export type IssueKind =
   | 'duplicate' | 'unregistered' | 'unapproved' | 'no-account' | 'over-max' | 'currency' | 'amount'
   | 'redirect' | 'bank' | 'disagree' | 'unverified' | 'unreadable' | 'lines' | 'unusual'
-  | 'payout-changed' | 'fresh-payout' | 'first-payment' | 'threshold' | 'chain'
+  | 'name-mismatch' | 'not-invoice' | 'possible-duplicate' | 'sparse' | 'plaintext'
+  | 'payout-changed' | 'fresh-payout' | 'first-payment' | 'threshold' | 'cross-chain' | 'chain'
   | 'owner-rejected' | 'transfer-failed' | 'other';
 
 /** Most important first: this order picks the headline and the one-line outcome. */
 export const PRIORITY: IssueKind[] = [
-  'duplicate', 'unregistered', 'unapproved', 'no-account', 'over-max', 'currency', 'amount', 'redirect', 'bank',
-  'disagree', 'unverified', 'unreadable', 'lines', 'unusual', 'payout-changed', 'fresh-payout', 'first-payment',
-  'threshold', 'chain', 'owner-rejected', 'transfer-failed', 'other',
+  'duplicate', 'not-invoice', 'unregistered', 'unapproved', 'no-account', 'name-mismatch', 'over-max', 'currency', 'amount',
+  'redirect', 'bank', 'possible-duplicate', 'disagree', 'unverified', 'plaintext', 'unreadable', 'sparse', 'lines', 'unusual',
+  'payout-changed', 'fresh-payout', 'first-payment', 'threshold', 'cross-chain', 'chain', 'owner-rejected',
+  'transfer-failed', 'other',
 ];
 
 export interface Issue {
@@ -25,42 +27,59 @@ export interface Issue {
   raw: string;
 }
 
-/** Classify one agent finding or contract reason. */
+/**
+ * Classify one on-chain reason ("agent: ..." flag or contract reason) or a stored agent message.
+ *
+ * Only the FIXED START of a message is looked at, never the middle: agent messages can contain text from the invoice
+ * (vendor name, addresses, file names) after their fixed opening, and an invoice must not be able to steer the
+ * classification by what it says. Findings the agent produced in this process carry their own kind instead (see
+ * Finding.kind in checks.ts) and are not classified from text at all.
+ */
 export function classify(message: string): Issue {
   let raw = message.trim();
   if (raw.startsWith('agent: ')) raw = raw.slice(7);
-  const m = raw.toLowerCase();
+  const m = raw;
   const kind: IssueKind =
     m.startsWith('owner:') ? 'owner-rejected'
-      : m.includes('invoice_hash already used') || m.startsWith('duplicate of') ? 'duplicate'
-      : m.includes('is not in the vendor registry') || m === 'not in registry' ? 'unregistered'
-      : m.includes('not approved in the treasury policy') ? 'unapproved'
-      : m.startsWith('no vendor near account') || m.startsWith('vendor near account') ? 'no-account'
-      : m.includes('max_per_invoice') ? 'over-max'
-      : m.startsWith('currency') ? 'currency'
-      : m.includes('is not positive') ? 'amount'
+      : m.startsWith('invoice_hash already used') || m.startsWith('duplicate of ') ? 'duplicate'
+      : m.startsWith('possible duplicate of ') ? 'possible-duplicate'
+      : /^vendor \S+ is not in the vendor registry/.test(m) || m === 'not in registry' ? 'unregistered'
+      : /^vendor \S+ is not approved in the treasury policy/.test(m) || m === 'vendor no longer approved (policy removed)' ? 'unapproved'
+      : m.startsWith('no vendor NEAR account') || m.startsWith('vendor NEAR account "') ? 'no-account'
+      : /^invoice says .*, but \S+ is registered as /s.test(m) ? 'name-mismatch'
+      : /^amount [\d.,]+ USDC is above the vendor max_per_invoice /.test(m) ? 'over-max'
+      : m.startsWith('currency "') ? 'currency'
+      : /^total -?[\d.,]+ is not positive/.test(m) ? 'amount'
+      : m.startsWith('document is ') ? 'not-invoice'
       : m.startsWith('invoice asks to pay a different address') ? 'redirect'
       : m.startsWith('invoice contains bank') ? 'bank'
-      : m.startsWith('readers disagree') || m.includes('returned no usable reading') ? 'disagree'
-      : m.startsWith('verification unavailable') ? 'unverified'
-      : m.startsWith('total could not be read') || m.startsWith('invoice number missing') ? 'unreadable'
-      : m.startsWith('line items sum') || m.startsWith('a line item amount') ? 'lines'
-      : m.includes('median paid amount') ? 'unusual'
+      : m.startsWith('readers disagree on ') || /^(reader A|reader B|both readers) returned no usable reading/.test(m) ? 'disagree'
+      : m.startsWith('verification unavailable for ') ? 'unverified'
+      : m.startsWith('end-to-end encryption failed') ? 'plaintext'
+      : m.startsWith('total could not be read') || m.startsWith('invoice number missing') || m.startsWith('document type could not be read') ? 'unreadable'
+      : m.startsWith('invoice has no payment text and no line items') ? 'sparse'
+      : m.startsWith('line items sum to ') || m.startsWith('a line item amount') ? 'lines'
+      : /^amount [\d.,]+ USDC is more than 3x this vendor's median paid amount/.test(m) ? 'unusual'
       : m === 'payout changed since agent checked' ? 'payout-changed'
       : m === 'payout changed recently' ? 'fresh-payout'
       : m === 'first payment to this vendor' ? 'first-payment'
       : m === 'amount above auto-pay threshold' ? 'threshold'
-      : m.startsWith('could not read near state') || m === 'registry call failed' ? 'chain'
+      : m.startsWith('cross-chain payout: owner confirms') ? 'cross-chain'
+      : m.startsWith('could not read NEAR state') || m === 'registry call failed' ? 'chain'
       : m === 'ft_transfer failed' || m === 'storage_deposit failed' ? 'transfer-failed'
       : 'other';
   return { kind, raw };
 }
 
+/** A message to classify from its text, or an issue whose kind is already known. */
+export type IssueInput = string | Issue;
+const toIssue = (x: IssueInput): Issue => (typeof x === 'string' ? classify(x) : { kind: x.kind, raw: x.raw.trim().replace(/^agent: /, '') });
+
 /** All issues, deduplicated by kind (first message wins), most important first. */
-export function rankIssues(messages: string[]): Issue[] {
+export function rankIssues(messages: IssueInput[]): Issue[] {
   const seen = new Map<string, Issue>();
   for (const msg of messages) {
-    const i = classify(msg);
+    const i = toIssue(msg);
     const key = i.kind === 'other' ? `other:${i.raw}` : i.kind;
     if (!seen.has(key)) seen.set(key, i);
   }
@@ -88,6 +107,12 @@ export function shortPhrase(issue: Issue, ctx: { threshold?: string | null } = {
     case 'fresh-payout': return 'payout changed recently';
     case 'first-payment': return 'first payment to this vendor';
     case 'threshold': return ctx.threshold ? `above your ${fmtAmount(ctx.threshold, { whole: true })} limit` : 'above your automatic limit';
+    case 'name-mismatch': return 'name differs from the registry';
+    case 'not-invoice': return 'not an invoice';
+    case 'possible-duplicate': return 'possible duplicate';
+    case 'sparse': return 'nothing to check it against';
+    case 'plaintext': return 'a reading was not encrypted';
+    case 'cross-chain': return 'you confirm the deposit address';
     case 'chain': return 'treasury could not be read';
     case 'owner-rejected': return 'rejected by you';
     case 'transfer-failed': return 'transfer failed';
@@ -112,9 +137,9 @@ export interface ReviewFacts {
   approved: boolean | null;
   maxPerInvoice: string | null;
   /** null when the agent's readings are not available (e.g. a payment proposed outside the web app). */
-  readers: { count: number; answered: number; verified: number; agree: boolean } | null;
-  /** The agent's findings (reject + hold) in its own words. */
-  agentFindings: string[];
+  readers: { count: number; answered: number; verified: number; agree: boolean; /** signed inside the model's TEE; undefined = not recorded (older records) */ tee?: number } | null;
+  /** The agent's findings (reject + hold) in its own words; pass {kind, raw} for findings that carry a kind. */
+  agentFindings: IssueInput[];
   /** The treasury's reasons for this payment (contract holds, agent flags, owner/failed reasons). */
   contractReasons: string[];
   payout: { address: string; chain: string } | null;
@@ -158,6 +183,7 @@ const mono = (text: string, strike = false): Segment => ({ text, mono: true, ...
 
 const ANCHOR: Partial<Record<IssueKind, BoxField>> = {
   duplicate: 'invoice_number', unregistered: 'vendor', unapproved: 'vendor', 'no-account': 'vendor', 'over-max': 'total',
+  'name-mismatch': 'vendor', 'not-invoice': 'total', 'possible-duplicate': 'invoice_number', sparse: 'payment_instructions',
   currency: 'total', amount: 'total', redirect: 'payment_instructions', bank: 'payment_instructions', unreadable: 'total',
   lines: 'total', unusual: 'total', 'payout-changed': 'vendor', 'fresh-payout': 'vendor', threshold: 'total',
   // 'first-payment' is a standing policy hold, not something wrong on the invoice: no region, no pin.
@@ -185,7 +211,7 @@ function disagreementSegments(raws: string[]): Segment[] {
   return parts;
 }
 
-function issueItem(issue: Issue, all: string[], f: ReviewFacts): Omit<ReviewItem, 'n'> {
+function issueItem(issue: Issue, all: Issue[], f: ReviewFacts): Omit<ReviewItem, 'n'> {
   const amt = f.amount ? `${fmtAmount(f.amount)} ${f.unit}` : 'This amount';
   const base = { ok: false, kind: issue.kind, anchor: ANCHOR[issue.kind] ?? null };
   switch (issue.kind) {
@@ -213,10 +239,31 @@ function issueItem(issue: Issue, all: string[], f: ReviewFacts): Omit<ReviewItem
       else detail.push(t('no payout on file.'));
       return { ...base, title: 'Different payout address', detail };
     }
+    case 'name-mismatch': {
+      const m = issue.raw.match(/^invoice says (.*), but (\S+) is registered as (.*)$/s);
+      return {
+        ...base, title: 'Name differs from the registry',
+        detail: m
+          ? [t('The registry has '), mono(m[2]), t(' as '), t(m[3]), t(', but the invoice is from '), t(m[1]), t('. Check it is the same business.')]
+          : [t(`${cap(issue.raw)}.`)],
+      };
+    }
+    case 'not-invoice':
+      return { ...base, title: 'Not an invoice', detail: [t(`${cap(issue.raw)}. Orvantra only pays invoices.`)] };
+    case 'possible-duplicate': {
+      const m = issue.raw.match(/^possible duplicate of (.*) \(([^()]*)\)$/s);
+      return { ...base, title: 'Possible duplicate', detail: m ? [t('The same vendor already has an invoice numbered '), mono(m[1]), t(` (${m[2]}). It may be the same invoice sent again.`)] : [t(`${cap(issue.raw)}.`)] };
+    }
+    case 'sparse':
+      return { ...base, title: 'Nothing to check it against', detail: [t('The invoice has no payment text and no line items, so there was nothing to compare with the total or the registry.')] };
+    case 'plaintext':
+      return { ...base, title: 'A reading was not encrypted', detail: [t("End-to-end encryption to NEAR AI's hardware failed for one model, so that reading went without it. Look at the invoice yourself.")] };
+    case 'cross-chain':
+      return { ...base, title: 'You confirm the deposit address', detail: [t('Payments to another chain wait for you: check the 1Click deposit address below against the quote before you approve.')] };
     case 'bank':
       return { ...base, title: 'Bank details on the invoice', detail: [t('Orvantra ignores them and pays only the address the vendor registered on-chain.')] };
     case 'disagree': {
-      const raws = all.map((x) => classify(x)).filter((x) => x.kind === 'disagree').map((x) => x.raw);
+      const raws = all.filter((x) => x.kind === 'disagree').map((x) => x.raw);
       return { ...base, anchor: raws.some((r) => r.includes('invoice number')) && !raws.some((r) => r.includes('total')) ? 'invoice_number' : 'total', title: 'The two readers disagree', detail: disagreementSegments(raws) };
     }
     case 'unverified':
@@ -261,6 +308,12 @@ function headlineFor(top: Issue, f: ReviewFacts): string {
     case 'amount': return 'This invoice has no amount to pay.';
     case 'redirect': return 'This invoice asks you to pay someone else.';
     case 'bank': return 'This invoice brings its own bank details.';
+    case 'name-mismatch': return 'The name on this invoice is not the registered vendor.';
+    case 'not-invoice': return 'This is not an invoice.';
+    case 'possible-duplicate': return 'This may be an invoice you already have.';
+    case 'sparse': return 'This invoice gave nothing to check it against.';
+    case 'plaintext': return 'One reading was not encrypted.';
+    case 'cross-chain': return `This pays ${f.vendorName} on another chain.`;
     case 'disagree': return 'The two readers read this invoice differently.';
     case 'unverified': return 'One reading could not be verified.';
     case 'unreadable': return 'Part of this invoice could not be read.';
@@ -289,7 +342,7 @@ function reassurance(top: Issue, f: ReviewFacts): string {
 }
 
 export function buildVerdict(f: ReviewFacts): Verdict {
-  const messages = [...f.agentFindings, ...f.contractReasons];
+  const messages = [...f.agentFindings, ...f.contractReasons].map(toIssue);
   const issues = rankIssues(messages);
   const kinds = new Set(issues.map((i) => i.kind));
 
@@ -309,9 +362,10 @@ export function buildVerdict(f: ReviewFacts): Verdict {
     items.push(issueItem(readerIssue, messages, f));
   } else if (f.readers && f.readers.agree && f.readers.answered === f.readers.count && f.readers.count > 0) {
     const what = [f.amount ? `${fmtAmount(f.amount)} ${f.unit}` : null, f.invoiceNumber].filter(Boolean).join(' and ');
-    const signed = f.readers.verified === f.readers.count
+    const inTee = f.readers.tee ?? f.readers.verified; // older records did not store tee: verified meant provider_tee
+    const signed = inTee === f.readers.count
       ? (f.readers.count === 2 ? " Both signed inside NEAR AI's secure hardware." : " Each signed inside NEAR AI's secure hardware.")
-      : '';
+      : f.readers.verified === f.readers.count ? " The signatures checked out, but not all were signed inside the model's own hardware." : '';
     items.push({
       ok: true, kind: 'readers', anchor: 'total', title: 'Read twice, privately',
       detail: [t(`${f.readers.count === 2 ? 'Two' : f.readers.count} models agree${what ? ` on ${what}` : ''}.${signed}`)],

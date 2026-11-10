@@ -1,5 +1,6 @@
 // Fresh (uncached) registry entry for one account, read by the vendor page after sign-in and after saving.
 import { isValidNearAccountId } from '@/lib/registry';
+import { failJson } from '@/lib/server/errors';
 import { readVendor } from '@/lib/server/vendor';
 
 export const runtime = 'nodejs';
@@ -12,6 +13,6 @@ export async function GET(_req: Request, { params }: { params: Promise<{ account
     const vendor = await readVendor(account);
     return Response.json({ vendor }, { headers: { 'cache-control': 'no-store' } });
   } catch (e) {
-    return Response.json({ error: e instanceof Error ? e.message : String(e) }, { status: 502 });
+    return failJson('vendor', e);
   }
 }

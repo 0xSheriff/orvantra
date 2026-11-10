@@ -11,11 +11,26 @@ import { SCHEMA, encodeDelegateAction } from '@near-js/transactions';
 import type { SignedDelegate } from '@near-js/transactions';
 import { REGISTRY_DEPOSIT, RELAY_METHODS, SET_VENDOR_GAS, isValidNearAccountId } from './registry';
 
+export { RateLimiter, clientIp } from './limiter';
+
 export const MAX_RELAY_GAS = SET_VENDOR_GAS;
 /** A SignedDelegate for one small function call is a few hundred bytes; refuse anything far larger before decoding. */
 export const MAX_SIGNED_DELEGATE_BYTES = 4096;
+/** A delegate may live at most this many blocks (about 17 minutes), so a leaked signature expires quickly. */
+export const MAX_BLOCK_HEIGHT_WINDOW = 1000n;
+/** The relayer refuses to sponsor anything when its own balance is below 1 NEAR. */
+export const MIN_RELAYER_BALANCE = 10n ** 24n;
+/** set_vendor may carry the storage estimate plus this margin, never more than DEPOSIT_CAP. */
+export const DEPOSIT_MARGIN = 10n ** 21n;
+export const DEPOSIT_CAP = 5n * 10n ** 22n; // 0.05 NEAR
 
 type Plain = Record<string, unknown>;
+
+/** Highest deposit a set_vendor delegate may attach: the registry's storage estimate plus a small margin, capped. */
+export function maxSetVendorDeposit(storageEstimate: bigint): bigint {
+  const v = storageEstimate + DEPOSIT_MARGIN;
+  return v > DEPOSIT_CAP ? DEPOSIT_CAP : v;
+}
 
 export interface RelayCheck {
   ok: boolean;
@@ -58,12 +73,18 @@ export function signatureValid(sd: SignedDelegate): boolean {
   }
 }
 
+/** The public key of the delegate in NEAR text form ("ed25519:..."). */
+export function delegateKeyString(sd: SignedDelegate): string {
+  return keyOf(sd.delegateAction.publicKey).toString();
+}
+
 /**
- * Policy: receiver is the registry; exactly one FunctionCall to set_vendor/remove_vendor; deposit exactly 1 yoctoNEAR
- * (the registry requires it; in a meta transaction it comes from the vendor's balance, not the relayer's); at most
- * 30 TGas; not expired; valid signature. `currentHeight` is the latest final block height.
+ * Policy: receiver is the registry; exactly one FunctionCall to set_vendor/remove_vendor; set_vendor attaches at
+ * least 1 yoctoNEAR and at most `maxSetVendorDeposit` (the storage deposit, taken from the VENDOR's balance, not the
+ * relayer's), remove_vendor exactly 1 yoctoNEAR; at most 30 TGas; not expired and not valid for more than
+ * 1000 blocks; valid signature. `currentHeight` is the latest final block height.
  */
-export function checkSignedDelegate(sd: SignedDelegate, o: { registryId: string; currentHeight: bigint }): RelayCheck {
+export function checkSignedDelegate(sd: SignedDelegate, o: { registryId: string; currentHeight: bigint; maxSetVendorDeposit: bigint }): RelayCheck {
   const da = sd.delegateAction;
   const no = (reason: string): RelayCheck => ({ ok: false, reason, senderId: da?.senderId });
   if (!da || typeof da.senderId !== 'string' || !isValidNearAccountId(da.senderId)) return no('The sender is not a valid NEAR account.');
@@ -72,29 +93,36 @@ export function checkSignedDelegate(sd: SignedDelegate, o: { registryId: string;
   const fc = (da.actions[0] as unknown as Plain).functionCall as { methodName: string; gas: bigint; deposit: bigint } | undefined;
   if (!fc) return no('Only a function call is allowed.');
   if (!(RELAY_METHODS as readonly string[]).includes(fc.methodName)) return no(`Only ${RELAY_METHODS.join(' and ')} are allowed.`);
-  if (BigInt(fc.deposit) !== REGISTRY_DEPOSIT) return no('Exactly 1 yoctoNEAR must be attached.');
+  const deposit = BigInt(fc.deposit);
+  if (fc.methodName === 'remove_vendor') {
+    if (deposit !== REGISTRY_DEPOSIT) return no('Exactly 1 yoctoNEAR must be attached.');
+  } else if (deposit < REGISTRY_DEPOSIT || deposit > o.maxSetVendorDeposit) {
+    return no('The deposit is not the registry storage deposit. Reload the page and try again.');
+  }
   if (BigInt(fc.gas) > MAX_RELAY_GAS) return no(`At most ${MAX_RELAY_GAS / 1_000_000_000_000n} TGas is allowed.`);
-  if (BigInt(da.maxBlockHeight) <= o.currentHeight) return no('This signature has expired. Please save again.');
+  const maxHeight = BigInt(da.maxBlockHeight);
+  if (maxHeight <= o.currentHeight) return no('This signature has expired. Please save again.');
+  if (maxHeight - o.currentHeight > MAX_BLOCK_HEIGHT_WINDOW) return no('This signature is valid for too long. Please save again.');
   if (!signatureValid(sd)) return no('The signature does not match the request.');
   return { ok: true, senderId: da.senderId, method: fc.methodName };
 }
 
-/** In-memory sliding-window limit per sender (e.g. 5 per hour). One per server process. */
-export class RateLimiter {
-  private hits = new Map<string, number[]>();
-  constructor(readonly limit: number, readonly windowMs: number) {}
+export interface AccessKeyInfo {
+  nonce: number | bigint | string;
+  permission: unknown;
+}
 
-  /** Records a hit and returns true when `key` is still under the limit. */
-  take(key: string, now: number): boolean {
-    const recent = (this.hits.get(key) ?? []).filter((t) => now - t < this.windowMs);
-    if (recent.length >= this.limit) {
-      this.hits.set(key, recent);
-      return false;
-    }
-    recent.push(now);
-    this.hits.set(key, recent);
-    return true;
-  }
+/**
+ * The delegate's key must be a FULL-ACCESS key of the sender on-chain (our methods need a deposit, which function-call
+ * keys cannot attach), and the delegate nonce must be above the key's current nonce (no replay of old signatures).
+ * `key` is null when the sender does not exist or the key is not on the account.
+ */
+export function checkAccessKey(sd: SignedDelegate, key: AccessKeyInfo | null): RelayCheck {
+  const no = (reason: string): RelayCheck => ({ ok: false, reason, senderId: sd.delegateAction.senderId });
+  if (!key) return no('This account does not exist, or the key that signed is not on it.');
+  if (key.permission !== 'FullAccess') return no('The signing key must be a full-access key of your account. Confirm with your wallet, not a limited sign-in key.');
+  if (BigInt(sd.delegateAction.nonce) <= BigInt(key.nonce)) return no('This signature is outdated. Please save again.');
+  return { ok: true, senderId: sd.delegateAction.senderId };
 }
 
 /** First failure in a FinalExecutionOutcome (tx or any receipt), as text; null if everything succeeded. */
@@ -107,8 +135,9 @@ export function outcomeFailure(outcome: unknown): string | null {
   return null;
 }
 
+/** The contract's own panic message (it is written for vendors), else a generic sentence. */
 function failureText(f: unknown): string {
   const panic = JSON.stringify(f).match(/"ExecutionError":"([^"]+)"/);
-  if (panic) return panic[1].replace(/^Smart contract panicked: /, '');
-  return JSON.stringify(f).slice(0, 300);
+  if (panic) return panic[1].replace(/^Smart contract panicked: /, '').slice(0, 200);
+  return 'The transaction failed on NEAR.';
 }
