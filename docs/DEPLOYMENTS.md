@@ -19,7 +19,9 @@ Live check performed: register -> view -> other account cannot alter -> invalid 
 ("address must be 0x followed by 40 hex chars") -> payout change bumps version 1 -> 2.
 
 ## Mainnet
-Not deployed. Requires explicit owner approval.
+No contracts deployed on mainnet (testnet-only build; testnet-only is eligible per HACKATHON Q-010).
+`orvantra.near` funded 2026-11-10 (0.2 NEAR + 2.09 USDC NEP-141) for one bonus real 1Click payment
+NEAR USDC -> Base USDC (~1 USDC), run from the owner's wallet as a demo extra — not a deployment.
 
 ## Day 5 (2026-11-06) — treasury v2 + restricted agent key
 | Contract / role | Account | Notes |
@@ -60,5 +62,32 @@ tx H2rFYdn6V6qT2cb3YQcm8ThnwRWugqk4An8p1yoJCSU8 (relayer paid gas and the 1 yoct
 Permanent demo: https://orvantra.up.railway.app (Railway project `orvantra`, service `web`, volume at
 /app/agent/data). One container runs the Next.js app + Telegram notifier (`Dockerfile`, `deploy/entrypoint.sh`).
 Secrets on Railway: NEAR AI key (capped), Telegram bot token/chat id, agent function-call key (propose_payment only,
-treasury v3), relayer key (testnet, registry-only relay policy). NOT on Railway: Fortytwo key, 1Click JWT, any owner
+treasury v4), relayer key (testnet, registry-only relay policy). NOT on Railway: Fortytwo key, 1Click JWT, any owner
 or mainnet key. Railway had an env-var breach in Oct 2026 — rotate these if Railway reports another incident.
+Container runs non-root; security headers set.
+
+## Security hardening (2026-11-08, review `docs/security/REVIEW-2026-11-08.md`)
+Three-reviewer audit confirmed: C-H1 cross-chain auto-pay to stolen-key address, C-M1 monthly cap double-spend at
+day boundary, C-M2 storage drain, W-H1 relay accepted foreign/replayed keys, W-H2 unauthenticated uploads, A-H1
+invoice vendor name not checked vs registry, A-H2 duplicate invoice-number tweaks.
+Fixed in `90243f0` (contracts) and `727df00` (web+agent). Contract tests 199, web 117, agent 297 all pass.
+Key behaviors now: cross-chain auto-pay threshold default 0 (cross-chain always Pending), rolling 30-day vendor cap,
+`max_open_payments` 25 + `near_reserve` 0.5 NEAR + `withdraw_near`, relay key/nonce/rate checks, upload size+rate
+limits, invoice vendor name must match registry account (else hold), normalized duplicate-invoice keys.
+
+## 2026-11-10 — treasury v4 + registry migrate
+| Contract / role | Account | Notes |
+|---|---|---|
+| treasury v4 (current) | `orvantra-treasury-v4.testnet` | owner `orvantra.testnet`, agent `orvantra-agent.testnet`; auto_pay 100, cross_chain_auto_pay 0, monthly_cap 1000 (rolling 30d), min_payout_age 120s, max_open_payments 25, near_reserve 0.5 NEAR; 500 tUSDC funded |
+| agent key (v4) | `ed25519:GUs21A7mLiQoC62JWjHhsc3PZxvvvUtYoQVBT2M9GF1u` | function-call only: `propose_payment` on v4, 0.25 NEAR; old v3 key backed up `orvantra-agent.testnet.v3-backup.json` |
+| registry | `orvantra-registry.testnet` | code upgraded in place via `migrate` (state kept: Acme v2, Bob v2); new `storage_cost_estimate` (~0.0045 NEAR refundable deposit on new entries) |
+
+Verified live (2026-11-10, through https://orvantra.up.railway.app, commit 727df00 build):
+- `01-acme-normal.png` -> both readers VERIFIED (provider TEE, e2ee=on), agree on critical fields -> PROPOSE ->
+  1Click dry quote (signature VALID, recipient matches registry v2, simulated testnet path) -> `propose_payment`
+  signed with the function-call key -> tx 5JRMF8W2xKQMPVdgHf6xA5MNPCjZsLAGs48PrGNzvxEm -> **payment #1 Pending**
+  with reasons: amount above auto-pay threshold, first payment to this vendor, cross-chain payout (owner confirms
+  the 1Click deposit address).
+- Agent key refusal check: 4/4 refused (non-propose methods).
+Note: E2EE reader connection failed from the local Mac (hotspot can't reach NVIDIA attestation) and correctly HELD
+the invoice ("end-to-end encryption failed") instead of reading plaintext; from Railway the same run goes e2ee=on.
