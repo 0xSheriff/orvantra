@@ -3,8 +3,9 @@ import Link from 'next/link';
 import { liveParts } from '@/lib/live';
 import { publicConfig, publicLinks } from '@/lib/server/config';
 import { getLiveCounts } from '@/lib/server/live';
+import { Mark } from '@/components/Mark';
 
-const TITLE = "Orvantra — the accounts-payable clerk that can't be tricked";
+const TITLE = "Orvantra — accounts payable, engineered for trust";
 const DESCRIPTION =
   'Orvantra privately reads and verifies invoices, then pays vendors in stablecoins across any chain. Every payment goes exclusively to the vendor\'s registered NEAR address and stays within your predefined spending limits.';
 
@@ -33,10 +34,10 @@ export default async function Home() {
     <div className="split">
       <section className="half light">
         <header className="top">
-          <Link className="logo" href="/">Orvantra</Link>
+          <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
         </header>
         <main className="mid" id="main">
-          <h1 className="display">The accounts-payable clerk that can&apos;t be tricked.</h1>
+          <h1 className="display">Accounts payable, engineered for trust.</h1>
           <p className="lede">
             It privately reads and verifies invoices, then pays vendors in stablecoins across any chain. Every payment
             goes exclusively to the vendor&apos;s registered NEAR address and stays within your predefined spending
@@ -44,12 +45,12 @@ export default async function Home() {
           </p>
           <nav className="doors" aria-label="Start here">
             <Link href="/review">
-              <b>I pay invoices</b>
-              <span>Open your treasury and approve what&apos;s held</span>
+              <b>Run your treasury</b>
+              <span>Review invoices and approve what&apos;s held</span>
               <i className="ar" aria-hidden="true">→</i>
             </Link>
             <a href={links.vendorUrl}>
-              <b>I send invoices</b>
+              <b>Set your payout</b>
               <span>Register how you want to be paid</span>
               <i className="ar" aria-hidden="true">→</i>
             </a>
