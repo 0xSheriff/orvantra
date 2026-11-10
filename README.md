@@ -113,7 +113,7 @@ All decisions are enforced **in the contracts**, not the agent. The agent can on
 ## Honest limits (read these)
 
 - **Testnet is primary.** The live demo runs on NEAR testnet with a test treasury (`orvantra-treasury-v4.testnet`), test funds, and a real restricted agent key. NEAR Intents is mainnet-only, so on testnet the cross-chain deposit is **simulated**: a real 1Click quote proves price and signature, but the tUSDC goes to a stand-in account. Same-chain payouts are fully real on-chain.
-- **One real mainnet payment exists as a bonus:** a genuine 1Click quote from `orvantra.near` (NEAR mainnet) delivering USDC to a Base address, executed from the owner's wallet — see `docs/DEPLOYMENTS.md`. No contracts are deployed on mainnet.
+- **Two real mainnet 1Click swaps exist as a bonus (owner-wallet, not product payments):** the owner's wallet ran a genuine NEAR → Base swap (0.45 NEAR → 1.607589 USDC) and the reverse Base → NEAR swap (1.607589 USDC → ~0.45 NEAR), each a real 1Click quote with verified signature and a plain deposit to the quote address. They prove the cross-chain delivery primitive works on mainnet in both directions. No Orvantra contracts are deployed on mainnet and the automated AP flow (invoice → TEE readers → registry → treasury proposal → owner approval) is testnet-only. Details in `docs/DEPLOYMENTS.md`.
 - **1Click deposit address verification is off-chain in v1.** The quote signature and recipient are verified off-chain; the contract caps a compromised agent's damage to the auto-pay limit (0 for cross-chain, so zero).
 - **No fiat off-ramp.** Vendors receive stablecoins.
 - **The 0.25 NEAR key allowance limits gas, not payments.** Payments are limited by treasury policy.
