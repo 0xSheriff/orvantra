@@ -23,7 +23,8 @@
     "oneclick-status": "tsx scripts/oneclick-status.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "notifier": "tsx src/notify/run.ts"
+    "notifier": "tsx src/notify/run.ts",
+    "mainnet-quote": "tsx scripts/mainnet-quote.ts"
   },
   "dependencies": {
     "@defuse-protocol/one-click-sdk-typescript": "^0.1.26",
