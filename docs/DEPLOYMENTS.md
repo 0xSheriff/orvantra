@@ -107,6 +107,41 @@ Key behaviors now: cross-chain auto-pay threshold default 0 (cross-chain always 
 `max_open_payments` 25 + `near_reserve` 0.5 NEAR + `withdraw_near`, relay key/nonce/rate checks, upload size+rate
 limits, invoice vendor name must match registry account (else hold), normalized duplicate-invoice keys.
 
+## 2026-11-10 — second-pass audit (Fable) + treasury v5 + agent ledger fix
+Second independent audit of the contracts (Fable, `--model fable` via Claude Code, 2026-11-10,
+read-only, report in session notes) confirmed the 2026-11-08 fixes (C-H1, C-M1, C-M2, C-M3) solid
+under default config — no path for a stolen agent key to move funds or redirect a payout. It found
+4 new Lows, all fixed in v5 (`7e5f558`):
+- **stale cap escape**: a Pending payment older than the 30-day window fell out of the caps but
+  could still be approved → `approve_payment` now auto-rejects with `REASON_STALE`.
+- **cross-chain quote expiry**: a held cross-chain payment paid a 1Click deposit address whose quote
+  expires off-chain → `Payment` gained `quote_deadline_ns` (v5: `created_at` + 24h for cross-chain,
+  0 for direct; the agent may later pass the quote's real `valid_until`); `approve_payment` rejects
+  past it with `REASON_QUOTE_EXPIRED`.
+- **resolve_executing race**: owner could mark a still-in-flight transfer `paid=false` → refused for
+  60s after the payment entered Executing (`RESOLVE_MIN_AGE_NS`).
+- **phantom proposal event**: `payment_proposed` was emitted before the `near_reserve` check, so a
+  reverted proposal left an event → moved after the `require!`.
+
+| Contract / role | Account | Notes |
+|---|---|---|
+| treasury v5 (current) | `orvantra-treasury-v5.testnet` | owner `orvantra-owner.testnet`, agent `orvantra-agent.testnet`; same config as v4 (auto_pay 100, cross_chain_auto_pay 0, monthly_cap 1000, min_payout_age 120s, max_open_payments 25, near_reserve 0.5 NEAR); 500 tUSDC funded; wasm sha256 `0b0002cae9cb04…` |
+| agent key (v5) | `ed25519:6jmrbRgycE1RqFEhn2kEp1um5c1eEUEzWLGhnAAs6nTS` | function-call only: `propose_payment` on v5, 0.25 NEAR; v4 key (GUs21A7m) superseded (keyfile overwritten by `--force` — v5 key backed up `orvantra-agent.testnet.v5.json`) |
+
+v5 deploys to a FRESH account (Payment struct layout changed); v4 is untouched and was never
+upgraded in place. v5 demo state: #0 Bob 45 Paid (warm-up), #1 Bob 12.50 Paid (direct, auto),
+#2 Acme 120 Pending (threshold + first + cross-chain), #3 Acme 80 Pending (changed-bank hold,
+agent flag, registry payout won), duplicate invoice rejected by the agent pre-contract.
+`prove-key-limits` 4/4 refused against v5.
+
+Agent bug found while re-running the demo (fixed, 1 new regression test, agent tests 298):
+`upsert()` carried a previous treasury's `tx_hash`/`payment_id` over when the same invoice was
+processed against a new treasury, so `alreadyProposed()` false-positived and silently skipped
+sending. Now a treasury change clears the execution fields.
+
+Tests (2026-11-10, re-run after each change): contracts 209 (treasury 162 + vendor-registry 40 +
+test-token 7), agent 298, web 117.
+
 ## 2026-11-10 — treasury v4 + registry migrate
 | Contract / role | Account | Notes |
 |---|---|---|

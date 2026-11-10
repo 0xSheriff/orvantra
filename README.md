@@ -51,7 +51,7 @@ The real recorded run of this exact case (2026-11-10): tx `5JRMF8W2xKQMPVdgHf6xA
 **Do:**
 ```bash
 cd contracts && cargo test        # 209 tests (treasury 162 + vendor-registry 40 + test-token 7)
-cd agent && npm ci && npm test    # 297 tests (extraction, checks, 1Click validation, flow)
+cd agent && npm ci && npm test    # 298 tests (extraction, checks, 1Click validation, flow)
 cd web && npm ci && npm test      # 117 tests (Next.js app)
 ```
 **See:** all green. Contract tests run the full policy engine with near-workspaces: auto-pay under threshold, Pending over threshold, duplicate-hash rejection, per-invoice cap, rolling 30-day vendor cap, payout-version holds, agent-flag holds, `max_open_payments`, `near_reserve` withdrawal floor.
