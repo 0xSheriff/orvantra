@@ -6,7 +6,7 @@ import { getLiveCounts } from '@/lib/server/live';
 
 const TITLE = "Orvantra — the accounts-payable clerk that can't be tricked";
 const DESCRIPTION =
-  'Orvantra reads your invoices privately and pays vendors in stablecoins on any chain — only to the address they registered on NEAR, and only within your limits.';
+  'Orvantra privately reads and verifies invoices, then pays vendors in stablecoins across any chain. Every payment goes exclusively to the vendor\'s registered NEAR address and stays within your predefined spending limits.';
 
 export const metadata: Metadata = {
   title: { absolute: TITLE },
@@ -38,8 +38,9 @@ export default async function Home() {
         <main className="mid" id="main">
           <h1 className="display">The accounts-payable clerk that can&apos;t be tricked.</h1>
           <p className="lede">
-            It reads your invoices privately and pays vendors in stablecoins on any chain — only to the address they
-            registered on NEAR, and only within your limits.
+            It privately reads and verifies invoices, then pays vendors in stablecoins across any chain. Every payment
+            goes exclusively to the vendor&apos;s registered NEAR address and stays within your predefined spending
+            limits.
           </p>
           <nav className="doors" aria-label="Start here">
             <Link href="/review">
