@@ -10,6 +10,12 @@ pub const DAY_NS: u64 = 24 * 60 * 60 * NS_PER_SEC;
 /// Monthly caps cover a rolling window of this many days, today included. An amount committed on
 /// day `d` stops counting on day `d + WINDOW_DAYS` (29 to 30 days later, depending on the hour).
 pub const WINDOW_DAYS: u64 = 30;
+/// A held cross-chain payment pays a 1Click deposit address whose quote expires off-chain. Until
+/// the agent passes the quote's real `valid_until`, the treasury assumes this lifetime (v5).
+pub const QUOTE_DEADLINE_DEFAULT_NS: u64 = 24 * 60 * 60 * NS_PER_SEC;
+/// `resolve_executing` is refused this long after the payment entered Executing, so the owner
+/// cannot settle a transfer that is still in flight.
+pub const RESOLVE_MIN_AGE_NS: u64 = 60 * NS_PER_SEC;
 
 /// `invoice_hash` is a sha256 hex digest: exactly 64 hex chars, stored lowercase.
 pub const INVOICE_HASH_LEN: usize = 64;
@@ -43,6 +49,8 @@ pub const REASON_STORAGE_DEPOSIT_FAILED: &str = "storage_deposit failed";
 pub const REASON_FT_TRANSFER_FAILED: &str = "ft_transfer failed";
 pub const REASON_OWNER_UNPAID: &str = "owner: resolved as not paid";
 pub const REASON_OWNER_PAID: &str = "owner: confirmed paid";
+pub const REASON_STALE: &str = "stale: proposed before the 30-day cap window; propose it again";
+pub const REASON_QUOTE_EXPIRED: &str = "1Click quote expired before approval; propose it again";
 
 /// Payout details, same shape as the vendor registry's `Payout`.
 #[near(serializers = [borsh, json])]
@@ -117,6 +125,22 @@ pub fn day_of(ts_ns: u64) -> u64 {
 /// Days counted for the monthly caps on `today`: the last `WINDOW_DAYS` days, today included.
 pub fn window_days(today: u64) -> std::ops::RangeInclusive<u64> {
     today.saturating_sub(WINDOW_DAYS - 1)..=today
+}
+
+/// A payment committed on `payment_day` has dropped out of the caps' window on `today`, so
+/// approving it now would spend outside the cap. Mirrors `window_days`.
+pub fn is_stale(payment_day: u64, today: u64) -> bool {
+    today.saturating_sub(payment_day) >= WINDOW_DAYS
+}
+
+/// Deadline for executing a held payment: 0 (none) for a direct NEAR payout, otherwise the 1Click
+/// deposit address is assumed valid for `QUOTE_DEADLINE_DEFAULT_NS` after the proposal.
+pub fn quote_deadline(direct: bool, created_at_ns: u64) -> u64 {
+    if direct {
+        0
+    } else {
+        created_at_ns.saturating_add(QUOTE_DEADLINE_DEFAULT_NS)
+    }
 }
 
 /// Lowercase and check an invoice hash (64 hex chars, i.e. a sha256 digest).

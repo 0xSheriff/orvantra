@@ -131,6 +131,10 @@ pub struct Payment {
     pub approved_by_owner: bool,
     /// Day (`block_timestamp / 1 day`) the amount is committed to.
     pub day: u64,
+    /// Approving after this block timestamp is refused (the 1Click deposit address has expired).
+    /// 0 = no deadline (direct NEAR payout, or not yet decided). v5: `created_at` + 24h for
+    /// cross-chain payouts; the agent may later pass the quote's real `valid_until`.
+    pub quote_deadline_ns: u64,
     pub created_at: U64,
     pub updated_at: U64,
 }
@@ -321,6 +325,7 @@ impl Treasury {
             reasons: policy::agent_hold_reasons(&agent_flags),
             approved_by_owner: false,
             day,
+            quote_deadline_ns: 0,
             created_at: now.into(),
             updated_at: now.into(),
         };
@@ -328,11 +333,12 @@ impl Treasury {
         self.commit(&vendor, day, amount.0);
         self.payments.push(payment.clone());
         self.open_payments += 1;
-        emit("payment_proposed", payment_json(&payment));
 
         // The record is stored now; make sure paying it out (and its callbacks) stays funded.
+        // Only then announce it: a reverted proposal must leave no event behind.
         self.flush();
         require!(self.available_near() >= self.near_reserve, "treasury needs a NEAR top-up");
+        emit("payment_proposed", payment_json(&payment));
 
         ext_registry::ext(self.registry.clone())
             .with_static_gas(GAS_GET_VENDOR)
@@ -386,6 +392,7 @@ impl Treasury {
                 p.payout = Some(payout);
                 p.destination = Some(destination);
                 p.direct = direct;
+                p.quote_deadline_ns = policy::quote_deadline(direct, p.created_at.0);
                 p.reasons = reasons;
                 self.set_status(id, PaymentStatus::Pending);
                 emit("payment_pending", payment_json(&self.payment(id)));
@@ -405,7 +412,9 @@ impl Treasury {
 
     /// Owner approves a Pending payment. The registry is checked again (the payout may have
     /// changed while the payment waited); the payment executes only if it is unchanged.
-    /// Panics while paused. If the vendor's policy was removed meanwhile, the payment is Rejected.
+    /// Panics while paused. The payment is Rejected instead if the vendor's policy was removed,
+    /// if its day has left the 30-day cap window (`REASON_STALE`), or if its 1Click deposit
+    /// address has expired (`REASON_QUOTE_EXPIRED`); the agent can then propose it again.
     /// Requires 1 yoctoNEAR (full-access key). Attach >= 100 TGas.
     #[payable]
     pub fn approve_payment(&mut self, id: u64) -> PromiseOrValue<PaymentStatus> {
@@ -415,6 +424,15 @@ impl Treasury {
         require!(p.status == PaymentStatus::Pending, "payment is not pending");
         if !self.policies.contains_key(&p.vendor) {
             return PromiseOrValue::Value(self.reject(id, policy::REASON_NO_POLICY));
+        }
+        // Its committed amount has left the caps' window: paying now would escape the cap.
+        let now = env::block_timestamp();
+        if policy::is_stale(p.day, policy::day_of(now)) {
+            return PromiseOrValue::Value(self.reject(id, policy::REASON_STALE));
+        }
+        // The 1Click deposit address only lives as long as its quote.
+        if p.quote_deadline_ns > 0 && now > p.quote_deadline_ns {
+            return PromiseOrValue::Value(self.reject(id, policy::REASON_QUOTE_EXPIRED));
         }
         self.payment_mut(id).approved_by_owner = true;
         self.set_status(id, PaymentStatus::Verifying);
@@ -475,12 +493,17 @@ impl Treasury {
     /// Owner settles a payment stuck in Executing (e.g. a callback ran out of gas). Check the
     /// token transfer on the explorer first: `paid = true` marks it Paid (vendor becomes known),
     /// `paid = false` marks it Failed and releases its cap. Emits `payment_resolved`.
+    /// Refused for 60s after the payment entered Executing (the transfer may still be in flight).
     /// Requires 1 yoctoNEAR (full-access key).
     #[payable]
     pub fn resolve_executing(&mut self, id: u64, paid: bool) -> PaymentStatus {
         self.assert_owner_full_access();
         let p = self.payment(id);
         require!(p.status == PaymentStatus::Executing, "payment is not executing");
+        require!(
+            env::block_timestamp() >= p.updated_at.0.saturating_add(policy::RESOLVE_MIN_AGE_NS),
+            "transfer may still be in flight: wait 60s after it started, then check the explorer"
+        );
         emit("payment_resolved", json!({ "id": p.id, "paid": paid }));
         if paid {
             self.payment_mut(id).reasons.push(policy::REASON_OWNER_PAID.into());

@@ -1712,7 +1712,7 @@ fn owner_resolves_stuck_payment_as_paid() {
     let mut t = setup();
     let id = executing_payment(&mut t);
     let spent = t.monthly_spent(None).0;
-    as_caller(OWNER, 1, NOW);
+    as_caller(OWNER, 1, NOW + RESOLVE_MIN_AGE_NS);
     assert_eq!(t.resolve_executing(id, true), PaymentStatus::Paid);
     let p = t.get_payment(id).unwrap();
     assert_eq!(p.status, PaymentStatus::Paid);
@@ -1730,7 +1730,7 @@ fn owner_resolves_stuck_payment_as_not_paid() {
     let mut t = setup();
     let id = executing_payment(&mut t);
     let spent = t.monthly_spent(None).0;
-    as_caller(OWNER, 1, NOW);
+    as_caller(OWNER, 1, NOW + RESOLVE_MIN_AGE_NS);
     assert_eq!(t.resolve_executing(id, false), PaymentStatus::Failed);
     let p = t.get_payment(id).unwrap();
     assert_eq!(p.reasons, vec![REASON_OWNER_UNPAID]);
@@ -1970,4 +1970,135 @@ fn pause_after_approval_rejects_in_callback() {
 #[test]
 fn policy_removal_after_approval_rejects_in_callback() {
     change_after_approval_rejects_in_callback(true);
+}
+
+// ======================================================================= v5: stale / expired / in-flight / phantom event
+
+#[test]
+fn stale_and_deadline_math() {
+    assert!(!is_stale(100, 100));
+    assert!(!is_stale(100, 100 + WINDOW_DAYS - 1), "still inside the window");
+    assert!(is_stale(100, 100 + WINDOW_DAYS), "mirrors window_days");
+    assert!(!is_stale(100, 50), "clock went backwards: not stale");
+    assert_eq!(quote_deadline(true, NOW), 0);
+    assert_eq!(quote_deadline(false, NOW), NOW + QUOTE_DEADLINE_DEFAULT_NS);
+    assert_eq!(quote_deadline(false, u64::MAX), u64::MAX, "saturates");
+}
+
+/// A Pending payment whose day left the caps' window cannot be approved (it would escape the cap).
+#[test]
+fn approve_rejects_stale_payment() {
+    let mut t = setup();
+    let id = propose(&mut t, "inv", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), Some(PaymentStatus::Pending));
+    assert_eq!(t.get_payment(id).unwrap().quote_deadline_ns, 0, "direct payout: no quote deadline");
+    as_caller(OWNER, 1, NOW + WINDOW_DAYS * DAY_NS);
+    assert_eq!(t.monthly_spent(None).0, 0, "its amount is already outside the window");
+    assert_eq!(status_of(t.approve_payment(id)), Some(PaymentStatus::Rejected));
+    let p = t.get_payment(id).unwrap();
+    assert_eq!(p.reasons.last().unwrap(), REASON_STALE);
+    assert!(!p.approved_by_owner);
+    assert!(calls().is_empty(), "no registry call");
+    assert_eq!(event_names(), vec!["payment_rejected"]);
+    assert_eq!(t.get_config().open_payments, 0);
+    // The owner can propose the invoice again after freeing its hash.
+    as_caller(OWNER, 1, NOW + WINDOW_DAYS * DAY_NS);
+    t.release_invoice_hash(id);
+    let again = propose_at(&mut t, "inv", 50, NOW + WINDOW_DAYS * DAY_NS);
+    assert_eq!(t.get_payment(again).unwrap().status, PaymentStatus::Verifying);
+}
+
+#[test]
+fn approve_on_last_window_day_still_works() {
+    let mut t = setup();
+    let id = propose(&mut t, "inv", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), Some(PaymentStatus::Pending));
+    as_caller(OWNER, 1, NOW + (WINDOW_DAYS - 1) * DAY_NS);
+    assert_eq!(status_of(t.approve_payment(id)), None, "registry re-check scheduled");
+    assert_eq!(t.get_payment(id).unwrap().status, PaymentStatus::Verifying);
+}
+
+/// A held cross-chain payment carries a 24h deadline; approving after it is refused.
+#[test]
+fn approve_rejects_expired_cross_chain_quote() {
+    let mut t = setup();
+    let id = propose_with_deposit(&mut t, "inv", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(base_vendor(1, 0))), Some(PaymentStatus::Pending));
+    let p = t.get_payment(id).unwrap();
+    assert!(!p.direct);
+    assert_eq!(p.quote_deadline_ns, NOW + QUOTE_DEADLINE_DEFAULT_NS);
+    as_caller(OWNER, 1, NOW + QUOTE_DEADLINE_DEFAULT_NS + 1);
+    assert_eq!(status_of(t.approve_payment(id)), Some(PaymentStatus::Rejected));
+    let p = t.get_payment(id).unwrap();
+    assert_eq!(p.reasons.last().unwrap(), REASON_QUOTE_EXPIRED);
+    assert!(!p.approved_by_owner);
+    assert!(calls().is_empty(), "no registry call");
+    assert_eq!(t.monthly_spent(None).0, 0, "cap released");
+    assert_eq!(t.get_config().open_payments, 0);
+}
+
+#[test]
+fn approve_cross_chain_within_quote_deadline_works() {
+    let mut t = setup();
+    let id = propose_with_deposit(&mut t, "inv", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(base_vendor(1, 0))), Some(PaymentStatus::Pending));
+    as_caller(OWNER, 1, NOW + QUOTE_DEADLINE_DEFAULT_NS);
+    assert_eq!(status_of(t.approve_payment(id)), None, "deadline is inclusive");
+    assert!(t.get_payment(id).unwrap().approved_by_owner);
+}
+
+/// A direct NEAR payout has no quote: approving it two days later is fine.
+#[test]
+fn approve_direct_payment_has_no_quote_deadline() {
+    let mut t = setup();
+    let id = propose(&mut t, "inv", 50);
+    assert_eq!(registry_answers(&mut t, id, Some(old_near_vendor())), Some(PaymentStatus::Pending));
+    as_caller(OWNER, 1, NOW + 2 * DAY_NS);
+    assert_eq!(status_of(t.approve_payment(id)), None);
+}
+
+#[test]
+#[should_panic(expected = "transfer may still be in flight")]
+fn resolve_refuses_while_transfer_may_be_in_flight() {
+    let mut t = setup();
+    let id = executing_payment(&mut t);
+    as_caller(OWNER, 1, NOW + RESOLVE_MIN_AGE_NS - 1);
+    t.resolve_executing(id, false);
+}
+
+#[test]
+fn resolve_works_once_the_payment_is_old_enough() {
+    let mut t = setup();
+    let id = executing_payment(&mut t);
+    assert_eq!(t.get_payment(id).unwrap().updated_at.0, NOW);
+    let early = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        as_caller(OWNER, 1, NOW);
+        t.resolve_executing(id, false)
+    }));
+    assert!(early.is_err(), "resolving immediately is refused");
+    assert_eq!(t.get_payment(id).unwrap().status, PaymentStatus::Executing);
+    as_caller(OWNER, 1, NOW + RESOLVE_MIN_AGE_NS);
+    assert_eq!(t.resolve_executing(id, false), PaymentStatus::Failed);
+}
+
+/// A proposal reverted by the NEAR reserve check leaves no `payment_proposed` event behind.
+#[test]
+fn reverted_proposal_emits_no_event() {
+    let mut t = setup();
+    let storage = 100_000;
+    as_caller_with_balance(AGENT, 0, u128::from(storage) * BYTE_COST + DEFAULT_NEAR_RESERVE, storage);
+    let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        t.propose_payment(hx("a"), acc(ACME), U128(1), 1, None, None, None, None)
+    }));
+    assert!(r.is_err(), "reserve check panics");
+    assert!(event_names().is_empty(), "no phantom payment_proposed: {:?}", get_logs());
+}
+
+#[test]
+fn accepted_proposal_emits_event_after_the_reserve_check() {
+    let mut t = setup();
+    let storage = 100_000;
+    as_caller_with_balance(AGENT, 0, u128::from(storage) * BYTE_COST + DEFAULT_NEAR_RESERVE + NEAR / 10, storage);
+    let _ = t.propose_payment(hx("a"), acc(ACME), U128(1), 1, None, None, None, None);
+    assert_eq!(event_names(), vec!["payment_proposed"]);
 }

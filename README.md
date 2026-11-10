@@ -50,7 +50,7 @@ The real recorded run of this exact case (2026-11-10): tx `5JRMF8W2xKQMPVdgHf6xA
 ### 8. Tests
 **Do:**
 ```bash
-cd contracts && cargo test        # 199 tests (treasury 152 + vendor-registry 40 + test-token 7)
+cd contracts && cargo test        # 209 tests (treasury 162 + vendor-registry 40 + test-token 7)
 cd agent && npm ci && npm test    # 297 tests (extraction, checks, 1Click validation, flow)
 cd web && npm ci && npm test      # 117 tests (Next.js app)
 ```
