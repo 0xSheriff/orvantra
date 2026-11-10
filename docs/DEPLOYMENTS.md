@@ -20,8 +20,26 @@ Live check performed: register -> view -> other account cannot alter -> invalid 
 
 ## Mainnet
 No contracts deployed on mainnet (testnet-only build; testnet-only is eligible per HACKATHON Q-010).
-`orvantra.near` funded 2026-11-10 (0.2 NEAR + 2.09 USDC NEP-141) for one bonus real 1Click payment
-NEAR USDC -> Base USDC (~1 USDC), run from the owner's wallet as a demo extra — not a deployment.
+`orvantra.near` funded 2026-11-10 for one bonus real 1Click payment, run from the owner's
+wallet as a demo extra — not a deployment.
+
+### Bonus real 1Click payment (2026-11-10) — COMPLETED, verified on-chain
+One real NEAR → Base cross-chain payment via NEAR Intents / 1Click, executed by the owner's
+wallet (Meteor) — the demo extra that proves the cross-chain payout path works on mainnet.
+- Origin: `orvantra.near` (NEAR mainnet), **0.45 NEAR**
+- 1Click quote: origin `nep141:wrap.near` (native NEAR, wrapped-or-unwrapped) →
+  destination `nep141:base-0x833589fcd6edb6e08f4c7c32d4f71b54bda02913.omft.near` (Base USDC),
+  recipient `0x0533cda710e375b00d106e557da995b859e5bf94`, quote signature VERIFIED
+- Deposit tx (owner-signed): `AD8QDvGKJTx8f3sjQM5XB9GYaiXrisAXRzYewAy4Lo7n`
+- 1Click status: **SUCCESS** (0% slippage, no refund, withdraw fee 2400 units)
+- **Verified delivery on Base: 1.607589 USDC** to the recipient (was 0.0 before);
+  destination tx `0x4abc3615397620258189036353e909f47044ba784461c8c8c0ed7003fdeac3fb`
+- Mechanism note (why a plain NEAR send works here): the wNEAR/NEAR-origin 1Click quote
+  returns a `depositAddress` you pay with a **plain native-NEAR transfer** (see 1Click's own
+  `near-intents-examples/1click-example/6-full-swap.ts`, which uses the same `nep141:wrap.near`
+  origin and a plain `account.transfer`). The `ft_transfer_call` → `intents.near` route is the
+  older Verifier-Contract path, not the 1Click one. A NEP-141 USDC origin, by contrast, needs
+  the `ft_transfer_call` mechanism and fails as a plain token send (verified 2026-11-10).
 
 ## Day 5 (2026-11-06) — treasury v2 + restricted agent key
 | Contract / role | Account | Notes |
