@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { imageSize } from 'orvantra-agent/records';
 import { chainLabel, fmtAmount, routeLabel, shortAddr } from '../format';
+import { crossChainEvidence } from '../evidence';
 import { layoutOverlays, type Overlays } from '../overlay';
 import { verdictFor, type Row } from '../rows';
 import type { Verdict } from '../verdict';
@@ -41,6 +42,8 @@ export interface ReviewView {
   owner: string | null;
   treasuryId: string;
   vendorName: string;
+  /** Set on a Rejected/Failed payment whose invoice hash is still held: the owner may free it (release_invoice_hash). */
+  release: { paymentId: number } | null;
 }
 
 const PAGE_W = 540;
@@ -77,11 +80,11 @@ function imageFor(row: Row, d: AppData): ReviewImage | null {
   return null;
 }
 
-export function reviewView(row: Row, d: AppData): ReviewView {
-  const verdict = verdictFor(row, d.ctx);
+export function reviewView(row: Row, d: AppData, opts: { hashHeld?: boolean | null } = {}): ReviewView {
+  const base = verdictFor(row, d.ctx);
   const image = imageFor(row, d);
   const boxes = row.record?.boxes ?? null;
-  const overlays = image ? layoutOverlays(boxes, verdict.items, verdict.outlines, image.height / image.width, { displayWidth: PAGE_W }) : { outlines: [], pins: [] };
+  const overlays = image ? layoutOverlays(boxes, base.items, base.outlines, image.height / image.width, { displayWidth: PAGE_W }) : { outlines: [], pins: [] };
   const overlayNote = !image ? null
     : !row.record ? 'Read from the command line, so the agent did not mark regions on this invoice.'
       : !boxes ? 'The reader did not return the positions of these fields, so the findings are listed on the right only.'
@@ -92,6 +95,17 @@ export function reviewView(row: Row, d: AppData): ReviewView {
   const direct = p ? p.direct : payout ? payout.chain === 'near' && payout.asset_id === `nep141:${d.ctx.tokenId}` : false;
   const simulated = !direct && d.cfg.network !== 'mainnet' && !!payout;
   const secs = row.record?.quote?.time_estimate_s;
+  // Cross-chain payouts wait for the owner to confirm the 1Click deposit address: show the evidence for it.
+  const quote = row.record?.quote ?? null;
+  const evidence = !direct && payout && (p || quote)
+    ? crossChainEvidence({
+      quote, chainQuoteHash: p?.quote_hash ?? null, depositAddress: p?.destination ?? p?.deposit_address ?? row.record?.deposit_address ?? null,
+      registryAddress: payout.address, vendorAccount: row.vendorAccount,
+    })
+    : [];
+  const verdict = evidence.length
+    ? { ...base, items: [...base.items, ...evidence.map((e, i) => ({ ...e, n: base.items.length + i + 1, kind: 'cross-chain' as const, anchor: null }))] }
+    : base;
   const eta = direct ? 'arrives in seconds' : secs ? `about ${secs} seconds` : payout && !simulated ? 'via 1Click' : null;
   return {
     key: row.key,
@@ -116,5 +130,6 @@ export function reviewView(row: Row, d: AppData): ReviewView {
     owner: d.config?.owner ?? null,
     treasuryId: d.cfg.treasuryId,
     vendorName: row.vendorName,
+    release: p && (p.status === 'Rejected' || p.status === 'Failed') && opts.hashHeld ? { paymentId: p.id } : null,
   };
 }

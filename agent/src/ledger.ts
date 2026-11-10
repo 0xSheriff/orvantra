@@ -27,7 +27,7 @@ export interface LedgerEntry {
   reasons?: string[];
   path?: string;
   agent_flags?: string[];
-  quote?: Record<string, unknown> & { quote_hash: string | null; simulated: boolean };
+  quote?: { quote_hash: string | null; simulated: boolean; signature_valid?: boolean };
   deposit_address?: string | null;
   payment_id?: number | null;
   tx_hash?: string | null;

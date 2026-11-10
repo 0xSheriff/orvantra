@@ -39,9 +39,9 @@ describe('buildRows', () => {
     const rows = buildRows([payment({})], [], [record({})], ctx);
     expect(rows).toHaveLength(1);
     const r = rows[0];
-    expect(r).toMatchObject({ key: 'p3', vendorName: 'Acme Design Studio', invoiceNumber: 'INV-2026-0150', category: 'held', route: 'USDC on Base' });
+    expect(r).toMatchObject({ key: 'p3', vendorName: 'Acme', invoiceName: 'Acme Design Studio', invoiceNumber: 'INV-2026-0150', category: 'held', route: 'USDC on Base' });
     expect(r.outcome).toBe('Held — asks to pay a different address');
-    expect(factsFor(r, ctx).agentFindings.some((m) => m.includes('duplicate'))).toBe(false);
+    expect(factsFor(r, ctx).agentFindings.some((f) => typeof f !== 'string' && f.kind === 'duplicate')).toBe(false);
   });
 
   it('a rejected duplicate upload of a paid-for invoice folds into the payment row (one row per hash)', () => {

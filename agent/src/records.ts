@@ -14,7 +14,11 @@ export interface ReaderSummary {
   ok: boolean;
   verified: boolean;
   signature_kind: string | null;
+  /** Signed inside the model's own TEE (provider_tee). Absent in older records. */
+  tee?: boolean;
   e2ee: boolean;
+  /** Why the request fell back to plaintext, if it did. */
+  e2ee_fallback_reason?: string | null;
   error: string | null;
 }
 
@@ -64,7 +68,12 @@ export interface InvoiceRecord {
   config: TreasuryConfig | null;
   vendor_paid_count: number;
   path: string | null;
-  quote: { amount_out_formatted?: string; time_estimate_s?: number; quote_hash: string | null; simulated: boolean } | null;
+  quote: {
+    amount_out_formatted?: string; time_estimate_s?: number; quote_hash: string | null; simulated: boolean;
+    /** Evidence for the owner (absent in records written before the review fixes). */
+    signature_valid?: boolean; recipient_matches_registry?: boolean; checks_ok?: boolean;
+    recipient?: string; deposit_address?: string | null; deadline?: string;
+  } | null;
   deposit_address: string | null;
   agent_flags: string[];
   tx_hash: string | null;

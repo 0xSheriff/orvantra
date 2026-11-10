@@ -65,7 +65,7 @@ export function UploadButton() {
       const res = await fetch('/api/upload', { method: 'POST', body });
       if (!res.ok || !res.body) {
         const j = (await res.json().catch(() => null)) as { message?: string } | null;
-        throw new Error(j?.message ?? `Upload failed (HTTP ${res.status}).`);
+        throw new Error(j?.message ?? (res.status === 413 ? 'That file is larger than 10 MB.' : res.status === 429 ? 'Too many uploads right now. Try again later.' : `Upload failed (HTTP ${res.status}).`));
       }
       const reader = res.body.pipeThrough(new TextDecoderStream()).getReader();
       let buf = '';
@@ -114,7 +114,7 @@ export function UploadButton() {
 
   return (
     <>
-      <button type="button" className="upload" onClick={() => input.current?.click()} disabled={running}>
+      <button type="button" className="upload" onClick={() => input.current?.click()} disabled={running} title="Uploads are public on this demo.">
         {running ? 'Reading…' : 'Upload invoice'}
       </button>
       <input
@@ -133,6 +133,7 @@ export function UploadButton() {
         <div className="head">
           <h2 id="run-title">{running ? 'Reading the invoice' : error ? 'The invoice was not processed' : 'Done'}</h2>
           <p>{name}</p>
+          <p>Uploads are public on this demo.</p>
         </div>
         <ol aria-live="polite">
           {STEPS.map((s, i) => {

@@ -22,7 +22,7 @@ if (!files.length) {
 const env = {
   ...process.env,
   NEAR_NETWORK: process.env.NEAR_NETWORK ?? 'testnet',
-  TREASURY_ID: process.env.TREASURY_ID ?? 'orvantra-treasury-v2.testnet',
+  TREASURY_ID: process.env.TREASURY_ID ?? 'orvantra-treasury-v4.testnet',
   REGISTRY_ID: process.env.REGISTRY_ID ?? 'orvantra-registry.testnet',
 };
 const filesDir = process.env.ORVANTRA_FILES_DIR ?? join(agentDir, 'data/files');

@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { ReviewScreen } from '@/components/ReviewScreen';
 import { UploadButton } from '@/components/UploadButton';
 import { getData } from '@/lib/server/cached';
+import { readHashHeld } from '@/lib/server/data';
 import { reviewView } from '@/lib/server/review';
 
 export const metadata: Metadata = { title: 'Invoice' };
@@ -15,7 +16,8 @@ export default async function InvoiceDetail({ params }: { params: Promise<{ key:
   // Older runs of the same invoice were folded into one row; their keys (e.g. a fresh upload link) still resolve.
   const row = d.rows.find((r) => r.key === key) ?? d.rows.find((r) => r.aliases.includes(key));
   if (!row) notFound();
-  const v = reviewView(row, d);
+  const settledBad = row.payment?.status === 'Rejected' || row.payment?.status === 'Failed';
+  const v = reviewView(row, d, { hashHeld: settledBad ? await readHashHeld(row.payment!.invoice_hash) : null });
   return (
     <ReviewScreen
       v={v}

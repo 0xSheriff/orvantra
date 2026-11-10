@@ -2,12 +2,13 @@
 // Right half of /register: sign in, then set your own payout details in the vendor registry.
 // Saving is gasless when the wallet can sign NEP-366 delegate actions (Orvantra's relayer pays); otherwise it is a
 // normal transaction and the wallet asks the vendor to pay the fee.
-// Both paths attach exactly 1 yoctoNEAR (the registry requires it). A dapp's limited function-call key cannot attach
-// a deposit, so the wallet always asks the vendor to confirm with their full-access key.
+// Both paths attach the registry's storage deposit (view storage_cost_estimate, largest entry; the registry refunds
+// the excess). The deposit comes from the VENDOR, never from the relayer. A dapp's limited function-call key cannot
+// attach a deposit, so the wallet always asks the vendor to confirm with their full-access key.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { explorerTxUrl } from '@/lib/links';
 import {
-  CHAINS, CHAIN_LABEL, MAX_DISPLAY_NAME_CHARS, REGISTRY_DEPOSIT, SET_VENDOR_GAS, addressError, displayNameError, isChain, relativeTime,
+  CHAINS, CHAIN_LABEL, MAX_DISPLAY_NAME_CHARS, SET_VENDOR_GAS, addressError, displayNameError, feeSentence, isChain, relativeTime,
   shortAddress, symbolFor, type Chain, type TokenOption,
 } from '@/lib/registry';
 import type { VendorPageData } from '@/lib/server/vendor';
@@ -38,7 +39,7 @@ function holdText(sec: number | null): string {
   return `Treasuries hold payments to a freshly changed address for ${span} before paying it.`;
 }
 
-export function VendorPanel({ network, options, minPayoutAgeSec, tokensError }: VendorPageData) {
+export function VendorPanel({ network, options, minPayoutAgeSec, tokensError, typicalDeposit, attachDeposit }: VendorPageData) {
   const w = useWallet();
   const account = w.accountId;
 
@@ -125,11 +126,13 @@ export function VendorPanel({ network, options, minPayoutAgeSec, tokensError }: 
     setRelayFailed(false);
     const args = { display_name: name, chain, asset_id: assetId, address };
     const gasless = w.gasless && !forceFee;
+    // The registry keeps what the entry's storage costs and refunds the rest, so the largest estimate always works.
+    const deposit = BigInt(attachDeposit);
     try {
       let txHash: string | null = null;
       if (gasless) {
         setBusy('Confirm in your wallet…');
-        const signedDelegate = await w.signDelegate({ method: 'set_vendor', args, gas: SET_VENDOR_GAS, deposit: REGISTRY_DEPOSIT });
+        const signedDelegate = await w.signDelegate({ method: 'set_vendor', args, gas: SET_VENDOR_GAS, deposit });
         setBusy('Saving on NEAR…');
         const r = await fetch('/api/relay', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ signedDelegate }) });
         const j = (await r.json()) as { ok: boolean; txHash: string | null; reason: string | null };
@@ -140,7 +143,7 @@ export function VendorPanel({ network, options, minPayoutAgeSec, tokensError }: 
         txHash = j.txHash;
       } else {
         setBusy('Confirm in your wallet…');
-        txHash = await w.call({ method: 'set_vendor', args, gas: SET_VENDOR_GAS, deposit: REGISTRY_DEPOSIT, callbackUrl: `${location.origin}/register` });
+        txHash = await w.call({ method: 'set_vendor', args, gas: SET_VENDOR_GAS, deposit, callbackUrl: `${location.origin}/register` });
       }
       setBusy('Reading it back…');
       const vendor = await fetchVendor(account).catch(() => null);
@@ -280,9 +283,7 @@ export function VendorPanel({ network, options, minPayoutAgeSec, tokensError }: 
             </p>
           ) : null}
           <p className="fine">
-            {w.gasless
-              ? "You'll confirm once in your wallet. Orvantra pays the network fee."
-              : "You'll confirm once in your wallet and pay a tiny network fee — under 0.01 NEAR."}
+            {feeSentence(w.gasless, typicalDeposit == null ? null : BigInt(typicalDeposit))}
             {existing ? <> Payers are alerted when your payout changes. {holdText(minPayoutAgeSec)}</> : null}
           </p>
         </form>

@@ -121,8 +121,15 @@ export interface QuoteExpectation {
   refundTo: string;
 }
 
+export const DEFAULT_SLIPPAGE_BPS = 100;
+/** The treasury only pays a deposit address shaped like this (64 lowercase hex = NEAR implicit account). */
+const IMPLICIT_ACCOUNT = /^[0-9a-f]{64}$/;
+
 export interface QuoteOptions {
+  /** Slippage requested in the quote and required back in the signed request (default 100 = 1%). */
   slippageBps?: number;
+  /** Real quotes: minimum time between now and the quote deadline (default 30 min). */
+  minLeadMs?: number;
   /** How long 1Click may take before refunding (default 1 h). */
   deadlineMs?: number;
   /** Max allowed USD loss amountIn→amountOut in basis points (default 300 = 3%). */
@@ -133,7 +140,7 @@ export function buildQuoteRequest(e: QuoteExpectation, now: Date, o: QuoteOption
   return {
     dry: e.dry,
     swapType: 'EXACT_INPUT' as QuoteRequest.swapType,
-    slippageTolerance: o.slippageBps ?? 100,
+    slippageTolerance: o.slippageBps ?? DEFAULT_SLIPPAGE_BPS,
     originAsset: e.originAsset,
     depositType: 'ORIGIN_CHAIN' as QuoteRequest.depositType,
     destinationAsset: e.destinationAsset,
@@ -160,7 +167,14 @@ export interface ValidateDeps {
   hash?: (q: QuoteResponse) => string;
 }
 
-const sameAddr = (a: string | undefined, b: string) => typeof a === 'string' && a.toLowerCase() === b.toLowerCase();
+const EVM_ADDRESS = /^0x[0-9a-fA-F]{40}$/;
+
+/** Exact comparison, except EVM addresses (checksum case is not part of the address). */
+export const sameAddr = (a: string | undefined, b: string) =>
+  typeof a === 'string' && (EVM_ADDRESS.test(b) && EVM_ADDRESS.test(a) ? a.toLowerCase() === b.toLowerCase() : a === b);
+
+/** A real quote's deadline must leave at least this long for the owner to approve and the deposit to land. */
+export const MIN_QUOTE_LEAD_MS = 30 * 60_000;
 
 /**
  * Strict validation of a 1Click quote against what the agent expects. Any mismatch is an error; the agent must not
@@ -193,6 +207,7 @@ export function validateQuote(q: QuoteResponse, e: QuoteExpectation, now: Date, 
   must('destinationAsset', r.destinationAsset, e.destinationAsset);
   if (!sameAddr(r.recipient, e.recipient)) errors.push(`recipient is ${JSON.stringify(r.recipient)}, expected the registry payout ${e.recipient}`);
   must('recipientType', r.recipientType, 'DESTINATION_CHAIN');
+  must('slippageTolerance', r.slippageTolerance, o.slippageBps ?? DEFAULT_SLIPPAGE_BPS);
   must('amount', r.amount, e.amount);
   must('quote.amountIn', quote.amountIn, e.amount);
   must('refundTo', r.refundTo, e.refundTo);
@@ -211,12 +226,13 @@ export function validateQuote(q: QuoteResponse, e: QuoteExpectation, now: Date, 
   if (!e.dry) {
     depositAddress = quote.depositAddress ?? null;
     if (!depositAddress) errors.push('real quote has no depositAddress');
-    else if (!isValidNearAccount(depositAddress)) errors.push(`depositAddress ${depositAddress} is not a NEAR account id`);
+    else if (!IMPLICIT_ACCOUNT.test(depositAddress)) errors.push(`depositAddress ${depositAddress} is not a 64-hex NEAR implicit account (the only kind the treasury pays)`);
     if (quote.depositMemo) errors.push('quote requires a deposit memo (not supported: the treasury cannot attach one)');
-    if (quote.deadline) {
-      const t = Date.parse(quote.deadline);
-      if (!Number.isFinite(t) || t <= now.getTime()) errors.push(`quote deadline ${quote.deadline} has passed`);
-    }
+    // A real quote must carry its own deadline, far enough ahead for the owner to approve and for the deposit to land.
+    const t = quote.deadline ? Date.parse(quote.deadline) : NaN;
+    if (!quote.deadline) errors.push('real quote has no deadline');
+    else if (!Number.isFinite(t) || t <= now.getTime()) errors.push(`quote deadline ${quote.deadline} has passed`);
+    else if (t < now.getTime() + (o.minLeadMs ?? MIN_QUOTE_LEAD_MS)) errors.push(`quote deadline ${quote.deadline} is less than ${(o.minLeadMs ?? MIN_QUOTE_LEAD_MS) / 60_000} minutes away`);
   } else if (quote.depositAddress) {
     errors.push('dry quote unexpectedly has a depositAddress');
   }
@@ -225,9 +241,19 @@ export function validateQuote(q: QuoteResponse, e: QuoteExpectation, now: Date, 
   const inUsd = Number(quote.amountInUsd);
   const outUsd = Number(quote.amountOutUsd);
   const maxLoss = o.maxLossBps ?? 300;
-  if (!(BigInt(/^\d+$/.test(quote.amountOut ?? '') ? quote.amountOut : '0') > 0n)) errors.push('quote amountOut is not positive');
-  if (Number.isFinite(inUsd) && Number.isFinite(outUsd) && inUsd > 0 && outUsd < inUsd * (1 - maxLoss / 10_000)) {
+  const amountOut = /^\d+$/.test(quote.amountOut ?? '') ? BigInt(quote.amountOut) : 0n;
+  if (!(amountOut > 0n)) errors.push('quote amountOut is not positive');
+  // The USD values are signed; without them there is no price check at all, so they are required.
+  if (!quote.amountInUsd || !quote.amountOutUsd || !Number.isFinite(inUsd) || !Number.isFinite(outUsd) || inUsd <= 0 || outUsd <= 0) {
+    errors.push('quote has no usable USD values (amountInUsd / amountOutUsd), so the price cannot be checked');
+  } else if (outUsd < inUsd * (1 - maxLoss / 10_000)) {
     errors.push(`quote loses too much: $${quote.amountInUsd} in -> $${quote.amountOutUsd} out (max ${maxLoss / 100}%)`);
+  }
+  // minAmountOut is what 1Click guarantees: it may be at most `slippage` below the quoted amountOut.
+  const slippage = BigInt(o.slippageBps ?? DEFAULT_SLIPPAGE_BPS);
+  if (!/^\d+$/.test(quote.minAmountOut ?? '')) errors.push('quote has no minAmountOut');
+  else if (BigInt(quote.minAmountOut) < (amountOut * (10_000n - slippage)) / 10_000n) {
+    errors.push(`quote minAmountOut ${quote.minAmountOut} is more than ${Number(slippage) / 100}% below amountOut ${quote.amountOut}`);
   }
 
   return { ok: errors.length === 0, errors, quote_hash: hash, signature_valid: signatureValid, deposit_address: depositAddress };

@@ -32,6 +32,12 @@ export interface TreasuryConfig {
   storage_deposit?: string;
   paused: boolean;
   payment_count: number;
+  /** Cross-chain payouts above this always wait for the owner (treasury v4; "0" = every cross-chain payout). */
+  cross_chain_auto_pay_threshold?: string;
+  open_payments?: number;
+  max_open_payments?: number;
+  near_reserve?: string;
+  available_near?: string;
 }
 
 export type PaymentStatus = 'Verifying' | 'Pending' | 'Executing' | 'Paid' | 'Rejected' | 'Failed';
@@ -51,7 +57,6 @@ export interface Payment {
   deposit_address?: string | null;
   quote_hash?: string | null;
   memo?: string | null;
-  agent_flags?: string[];
   approved_by_owner?: boolean;
   updated_at?: string;
 }
@@ -101,6 +106,9 @@ export const DEFAULT_RPC_URLS: Record<string, string[]> = {
   mainnet: ['https://free.rpc.fastnear.com', 'https://rpc.mainnet.near.org'],
 };
 
+/** The treasury every tool points at unless TREASURY_ID says otherwise. */
+export const DEFAULT_TREASURY_ID = 'orvantra-treasury-v4.testnet';
+
 export function nearConfig(env: NodeJS.ProcessEnv = process.env): NearConfig {
   const network = env.NEAR_NETWORK ?? 'testnet';
   const list = (env.NEAR_RPC_URLS ?? env.NEAR_RPC_URL ?? '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -109,7 +117,7 @@ export function nearConfig(env: NodeJS.ProcessEnv = process.env): NearConfig {
     network,
     rpcUrls: list.length ? list : DEFAULT_RPC_URLS[network] ?? [`https://rpc.${network}.near.org`],
     registryId: env.REGISTRY_ID ?? 'orvantra-registry.testnet',
-    treasuryId: env.TREASURY_ID ?? 'orvantra-treasury-v3.testnet',
+    treasuryId: env.TREASURY_ID ?? DEFAULT_TREASURY_ID,
     cacheTtlMs: env.NEAR_VIEW_CACHE_MS !== undefined && Number.isFinite(ttl) && ttl >= 0 ? ttl : 30_000,
     retry: DEFAULT_RETRY,
   };
@@ -259,7 +267,11 @@ export function view<T>(cfg: NearConfig, contract: string, method: string, args:
 export const getVendor = (cfg: NearConfig, accountId: string) =>
   view<VendorView | null>(cfg, cfg.registryId, 'get_vendor', { account_id: accountId });
 
-export const getPayoutAgeNs = (cfg: NearConfig, accountId: string) =>
+/** yoctoNEAR (string) a vendor must attach to create a registry entry with these field lengths (bytes). */
+export const getStorageCostEstimate = (cfg: NearConfig, displayNameLen: number, addressLen: number, assetLen: number) =>
+  view<string>(cfg, cfg.registryId, 'storage_cost_estimate', { display_name_len: displayNameLen, address_len: addressLen, asset_len: assetLen });
+
+export const getPayoutAgeNs =(cfg: NearConfig, accountId: string) =>
   view<string | null>(cfg, cfg.registryId, 'payout_age_ns', { account_id: accountId });
 
 export const getVendorPolicy = (cfg: NearConfig, vendor: string) =>

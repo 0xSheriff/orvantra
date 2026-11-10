@@ -10,7 +10,10 @@ export type Category = 'held' | 'paid' | 'stopped';
 export interface Row {
   /** p<payment id> | u<record id> | l<hash prefix> */
   key: string;
+  /** The registry display name when the vendor is registered (it is who gets paid), else what the invoice says. */
   vendorName: string;
+  /** The name printed on the invoice, when it differs from vendorName (shown second). */
+  invoiceName: string | null;
   vendorAccount: string | null;
   invoiceNumber: string | null;
   /** When the invoice arrived: ledger created time, else the upload time (web runs), else on-chain created_at. */
@@ -96,12 +99,15 @@ export function factsFor(row: Pick<Row, 'state' | 'vendorName' | 'vendorAccount'
     approved: policy ? true : r ? !!r.vendor_policy : null,
     maxPerInvoice: policy?.max_per_invoice ?? null,
     readers: r && r.readers.length
-      ? { count: r.readers.length, answered: r.readers.filter((x) => x.ok).length, verified: r.readers.filter((x) => x.verified).length, agree: !!r.agree }
+      ? {
+        count: r.readers.length, answered: r.readers.filter((x) => x.ok).length, verified: r.readers.filter((x) => x.verified).length, agree: !!r.agree,
+        ...(r.readers.every((x) => x.tee !== undefined) ? { tee: r.readers.filter((x) => x.tee).length } : {}),
+      }
       : null,
     // A record read after this payment was proposed sees its own payment as "already used": not a real duplicate.
     agentFindings: (r?.decision?.findings ?? [])
-      .filter((f) => !(p && r?.invoice_hash === p.invoice_hash && classify(f.message).kind === 'duplicate'))
-      .map((f) => f.message),
+      .map((f) => ({ kind: f.kind ?? classify(f.message).kind, raw: f.message }))
+      .filter((f) => !(p && r?.invoice_hash === p.invoice_hash && f.kind === 'duplicate')),
     contractReasons: p?.reasons ?? [],
     payout: payout ? { address: payout.address, chain: payout.chain } : null,
     autoPayThreshold: ctx.config?.auto_pay_threshold ?? r?.config?.auto_pay_threshold ?? null,
@@ -114,16 +120,23 @@ export function verdictFor(row: Row, ctx: ChainContext): Verdict {
 }
 
 /**
- * The name read from the invoice, unless it is missing or just the account id; then the registry display name;
- * then a name read by another run of the same invoice (`readNames`); then the account id.
+ * Who the vendor is, registry first: the registry display name (the business that gets paid), then a name read from
+ * an invoice (this run, or another run of the same invoice via `readNames`), then the account id. Names that are
+ * missing or just the account id are skipped.
  */
 export function vendorNameOf(acct: string | null, rec: InvoiceRecord | null, ctx: ChainContext, readNames: (string | null | undefined)[] = []): string {
   const useful = (n: string | null | undefined): n is string => !!n && n.trim() !== '' && n.trim() !== acct;
-  const read = rec?.invoice?.vendor_name;
-  if (useful(read)) return read;
   const reg = (acct ? ctx.registry.get(acct)?.display_name : null) || rec?.registry_entry?.display_name;
   if (useful(reg)) return reg;
+  const read = rec?.invoice?.vendor_name;
+  if (useful(read)) return read;
   return readNames.find(useful) ?? acct ?? 'Unknown vendor';
+}
+
+/** The name printed on the invoice when it is not the name shown (registry first, invoice second). */
+export function invoiceNameOf(shown: string, rec: InvoiceRecord | null, readNames: (string | null | undefined)[] = []): string | null {
+  const read = [rec?.invoice?.vendor_name, ...readNames].find((n): n is string => !!n && n.trim() !== '');
+  return read && read.trim().toLowerCase() !== shown.trim().toLowerCase() ? read.trim() : null;
 }
 
 /** When the agent first saw a ledger entry: `created_at`, else its first status (older ledgers). */
@@ -155,6 +168,7 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
     const row: Row = {
       key: `p${p.id}`,
       vendorName: vendorNameOf(p.vendor, rec, ctx),
+      invoiceName: null,
       vendorAccount: p.vendor,
       invoiceNumber: rec?.invoice?.invoice_number || p.memo || led?.invoice_number || null,
       receivedAt: ledAt ?? chainAt,
@@ -173,6 +187,7 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
       ledger: led,
       fixtureFile: rec ? null : led?.file ?? null,
     };
+    row.invoiceName = invoiceNameOf(row.vendorName, rec);
     row.outcome = verdictFor(row, ctx).outcome;
     rows.push(row);
   }
@@ -186,6 +201,7 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
     const row: Row = {
       key: `u${r.id}`,
       vendorName: vendorNameOf(acct, r, ctx),
+      invoiceName: null,
       vendorAccount: acct,
       invoiceNumber: r.invoice?.invoice_number || null,
       receivedAt: r.received_at,
@@ -203,6 +219,7 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
       ledger: null,
       fixtureFile: null,
     };
+    row.invoiceName = invoiceNameOf(row.vendorName, r);
     const v = verdictFor(row, ctx);
     const hasFinding = (r.decision?.findings.length ?? 0) > 0;
     row.outcome = r.outcome === 'already-proposed' ? RECORD_OUTCOME['already-proposed']
@@ -221,6 +238,7 @@ export function buildRows(payments: Payment[], ledger: LedgerEntry[], records: I
     rows.push({
       key: `l${l.invoice_hash.slice(0, 16)}`,
       vendorName: vendorNameOf(l.vendor, null, ctx),
+      invoiceName: l.vendor_name && l.vendor_name.trim().toLowerCase() !== vendorNameOf(l.vendor, null, ctx).trim().toLowerCase() ? l.vendor_name : null,
       vendorAccount: l.vendor,
       invoiceNumber: l.invoice_number,
       receivedAt: ledAt,
@@ -261,9 +279,12 @@ export function dedupeByHash(rows: Row[], ctx: ChainContext): Row[] {
   for (const g of groups.values()) {
     if (g.length === 1) { out.push(g[0]); continue; }
     const [win, ...rest] = [...g].sort((a, b) => Number(!!b.payment) - Number(!!a.payment) || lastRead(b).localeCompare(lastRead(a)));
+    const readNames = g.map((r) => r.record?.invoice?.vendor_name);
+    const vendorName = vendorNameOf(win.vendorAccount, win.record, ctx, readNames);
     out.push({
       ...win,
-      vendorName: vendorNameOf(win.vendorAccount, win.record, ctx, g.map((r) => r.record?.invoice?.vendor_name)),
+      vendorName,
+      invoiceName: invoiceNameOf(vendorName, win.record, readNames) ?? win.invoiceName,
       readsAt: [...new Set(g.flatMap((r) => r.readsAt))].sort(),
       aliases: [...win.aliases, ...rest.flatMap((r) => [r.key, ...r.aliases])],
     });

@@ -29,8 +29,21 @@ describe('parseAmount', () => {
     expect(parseAmount(text)).toBe(units);
   });
 
-  it('treats a single dot as decimal (USD convention)', () => {
-    expect(parseAmount('1.200')).toBe(1_200_000n);
+  it('treats a single dot as decimal, but not the ambiguous "1.200" shape (LOW-3)', () => {
+    expect(parseAmount('1.5')).toBe(1_500_000n);
+    expect(parseAmount('12.50')).toBe(12_500_000n);
+    expect(parseAmount('0.125')).toBe(125_000n);
+    expect(parseAmount('1.200')).toBeNull();
+    expect(parseAmount('12.500')).toBeNull();
+    expect(parseAmount('USDC 120.500')).toBeNull();
+    expect(parseAmount('1,200.000')).toBe(1_200_000_000n);
+  });
+
+  it.each([
+    ['−120.00'], ['–120.00'], ['(120.00)'], ['$(120.00)'], ['120.00-'], ['120.00 CR'], ['120.00CR'],
+    ['Credit 120.00'], ['credit note 120.00'], ['Refund: 120.00'], ['- 120'], ['USD -120'], ['－120.00'],
+  ])('credit-note notation %s is negative (A-M2)', (text) => {
+    expect(parseAmount(text)).toBe(-120_000_000n);
   });
 
   it.each([
@@ -133,6 +146,7 @@ describe('normalizeExtraction', () => {
       payment_instructions_text: '  ',
     });
     expect(n).toEqual({
+      document_type: null, // the reader did not say
       vendor_name: 'Acme Design Studio',
       vendor_account: 'orvantra-acme.testnet',
       invoice_number: 'INV-2026-0142',

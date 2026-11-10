@@ -26,7 +26,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
       <div className="ph">
         <div>
           <h1>All invoices</h1>
-          <p>Every invoice Orvantra has read, and what happened to it.</p>
+          <p>Every invoice Orvantra has read, and what happened to it. Uploads are public on this demo.</p>
         </div>
         <UploadButton />
       </div>
@@ -47,7 +47,7 @@ export default async function Invoices({ searchParams }: { searchParams: Promise
             <tr key={r.key} className={r.key === sel ? 'sel' : undefined}>
               <td>
                 <Link className="row v" href={`/invoices/${r.key}`}>{r.vendorName}</Link>
-                <div className="s">{r.vendorAccount ?? '—'}</div>
+                <div className="s">{r.vendorAccount ?? '—'}{r.invoiceName ? ` · invoice says ${r.invoiceName}` : ''}</div>
               </td>
               <td>
                 <span className="mono">{r.invoiceNumber ?? '—'}</span>

@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { VendorPanel } from '@/components/VendorPanel';
 import { WalletProvider } from '@/components/WalletProvider';
+import { feeSentence } from '@/lib/registry';
 import { vendorPageData } from '@/lib/server/vendor';
 
 const TITLE = 'Get paid your way — register your payout details with Orvantra';
@@ -19,6 +20,8 @@ export const metadata: Metadata = {
 /** Vendor sign-up, from the approved mockup design/final-vendor.html. Public: no app sidebar. */
 export default async function Register() {
   const data = await vendorPageData();
+  const typical = data.typicalDeposit == null ? null : BigInt(data.typicalDeposit);
+  const feeLine = `${feeSentence(true, typical)} Other wallets pay a tiny network fee (under 0.01 NEAR) plus the refundable deposit.`;
   return (
     <div className="split vendor">
       <section className="half light">
@@ -33,7 +36,7 @@ export default async function Register() {
             fake &quot;our bank details changed&quot; email can&apos;t move your money.
           </p>
           <dl className="facts">
-            <div><dt>Free with gasless wallets</dt><dd>Orvantra pays the network fee for you. Other wallets pay a tiny fee themselves — under 0.01 NEAR.</dd></div>
+            <div><dt>No network fee with gasless wallets</dt><dd>{feeLine}</dd></div>
             <div><dt>Only you can change it</dt><dd>Changes are signed by your NEAR account. Payers are alerted before paying a new address.</dd></div>
             <div><dt>Put your name on invoices</dt><dd>Write <code className="m">acme.near</code> instead of a long address.</dd></div>
           </dl>

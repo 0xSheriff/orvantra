@@ -15,7 +15,7 @@ import { alreadyProposed, defaultLedgerPath, readLedger, upsert, writeLedger, ty
 import * as near from './near.ts';
 import { formatAmount } from './normalize.ts';
 import {
-  buildQuoteRequest, getQuote, oneClickConfig, pollStatus, quoteSummary, submitDepositTx, validateQuote,
+  buildQuoteRequest, getQuote, oneClickConfig, pollStatus, quoteSummary, sameAddr, submitDepositTx, validateQuote,
 } from './oneclick.ts';
 import {
   agentFlags, buildProposeArgs, DEFAULT_PROPOSE_GAS_TGAS, DEFAULT_SIM_DEPOSIT_ACCOUNT, preflightProblems, quoteExpectation,
@@ -55,6 +55,18 @@ export type PayOutcome =
   | 'contract-refused' // transaction failed on-chain
   | 'proposed'; // payment exists on-chain (see payment.status)
 
+/** What the owner needs to see before confirming a cross-chain payout (shown on the review screen). */
+export interface QuoteEvidence {
+  quote_hash: string | null;
+  simulated: boolean;
+  /** The 1Click manager-key signature over the quote verified. */
+  signature_valid: boolean;
+  /** The quote's recipient equals the vendor's registry address. */
+  recipient_matches_registry: boolean;
+  /** Every strict check passed (a failing quote is never proposed). */
+  checks_ok: boolean;
+}
+
 export interface PayResult {
   outcome: PayOutcome;
   /** Process exit code the CLI uses for this outcome. */
@@ -63,7 +75,7 @@ export interface PayResult {
   analysis: Analysis;
   invoice_hash: string | null;
   path: PayPath | null;
-  quote: (ReturnType<typeof quoteSummary> & { quote_hash: string | null; simulated: boolean }) | null;
+  quote: (ReturnType<typeof quoteSummary> & QuoteEvidence) | null;
   deposit_address: string | null;
   agent_flags: string[];
   tx_hash: string | null;
@@ -190,7 +202,10 @@ export async function payInvoice(file: string, opts: PayOptions, hooks: PayHooks
     log(`  recipient ${summary.recipient} | ${summary.destination_asset}`);
     log(`  signature ${check.signature_valid ? 'VALID (1Click manager key)' : 'INVALID'} | quote_hash ${check.quote_hash}`);
     for (const e of check.errors) log(`  [quote error] ${e}`);
-    result.quote = { ...summary, quote_hash: check.quote_hash, simulated: path === 'oneclick-simulated' };
+    result.quote = {
+      ...summary, quote_hash: check.quote_hash, simulated: path === 'oneclick-simulated',
+      signature_valid: check.signature_valid, recipient_matches_registry: sameAddr(summary.recipient, payout.address), checks_ok: check.ok,
+    };
     record({ path, quote: result.quote }, check.ok ? 'quote:ok' : 'quote:invalid', check.errors.join('; ') || undefined);
     if (!check.ok) {
       step('quote', 'error', check.errors.join('; '));
@@ -216,7 +231,7 @@ export async function payInvoice(file: string, opts: PayOptions, hooks: PayHooks
   const args = buildProposeArgs({
     invoiceHash: entryHash, vendor, amount, payoutVersion: payout.version, path,
     depositAddress: depositAddress ?? (execute ? null : '<deposit address from the real quote at --execute>'),
-    quoteHash, invoiceNumber: inv.invoice_number, flags,
+    quoteHash, invoiceNumber: inv.invoice_number, flags, depositPlaceholder: !depositAddress,
   });
   const signer = process.env.AGENT_ID ?? config.agent;
   log(toJson({ signer, receiver: cfg.treasuryId, method: 'propose_payment', args, gas: `${gasTgas} TGas`, deposit: '0' }));

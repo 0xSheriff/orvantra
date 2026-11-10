@@ -46,5 +46,16 @@
     "playwright": "^1.65.0",
     "typescript": "^5.9.3",
     "vitest": "^5.1.0"
+  },
+  "overrides": {
+    "base-x": "3.0.11",
+    "bs58": "4.0.1",
+    "@here-wallet/core": {
+      "bn.js": "5.2.5"
+    },
+    "@meteorwallet/sdk": {
+      "nanoid": "5.1.16",
+      "decode-uri-component": "0.5.1"
+    }
   }
 }

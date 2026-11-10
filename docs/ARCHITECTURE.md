@@ -86,7 +86,7 @@ under a strict schema) and `moonshotai/kimi-k2.6` (misread a total).
 - **1Click quotes.** Signature verified with the SDK (`verifyQuoteSignature`), then every routing field is
   compared with the registry payout; `quote_hash` (base58 sha256 of the signed payload) is stored with the payment.
   Mainnet: real quote, pay `quote.depositAddress`, then submit the tx hash and poll `/status`. Testnet: a dry mainnet
-  quote proves price + signature and tUSDC goes to `orvantra-1click-sim.testnet`, labelled **SIMULATED**.
+  quote proves price + signature and tUSDC goes to a 64-hex implicit stand-in account (`SIM_DEPOSIT_ACCOUNT`, see `agent/src/plan.ts`), labelled **SIMULATED**.
 - **Gas.** propose/approve: 65 TGas static (registry 5 + decision callback 60, which passes on storage_deposit 10 +
   registration callback 30 = ft_transfer 10 + transfer callback 10); attach 150 TGas.
 

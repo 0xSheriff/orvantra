@@ -1,6 +1,7 @@
 // Full pipeline for one invoice: read (2 NEAR AI readers) -> normalize -> compare -> on-chain views -> checks.
 // Read-only: nothing is written on-chain.
-import { decide, type CheckInput, type Decision } from './checks.ts';
+import { decide, type CheckInput, type Decision, type DuplicateCandidate } from './checks.ts';
+import { defaultLedgerPath, readLedger, type Ledger } from './ledger.ts';
 import { compareReadings, type Comparison } from './compare.ts';
 import { readInvoice, type InvoiceReading, type PageImage } from './extract.ts';
 import { invoiceHash } from './hash.ts';
@@ -56,7 +57,24 @@ export async function fetchChainState(cfg: near.NearConfig, account: string | nu
   return state;
 }
 
+function safeReadLedger(): Ledger {
+  try {
+    return readLedger(defaultLedgerPath());
+  } catch {
+    return {};
+  }
+}
+
+/** Ledger entries of this network + treasury that were not stopped by the agent (they may be the same invoice under another hash). */
+export function ledgerCandidates(ledger: Ledger, network: string, treasury: string): DuplicateCandidate[] {
+  return Object.values(ledger)
+    .filter((e) => e.network === network && e.treasury === treasury && e.decision !== 'reject')
+    .map((e) => ({ invoice_hash: e.invoice_hash, vendor: e.vendor, invoice_number: e.invoice_number, status: e.statuses.at(-1)?.status ?? e.decision }));
+}
+
 export interface AnalyzeOptions {
+  /** The agent's ledger (default: read from disk) for the secondary duplicate guard. */
+  ledger?: Ledger;
   /** invoice_hash -> file, for duplicate detection within a batch. */
   seenHashes?: Map<string, string>;
   now?: Date;
@@ -85,7 +103,10 @@ export async function analyzeInvoice(file: string, opts: AnalyzeOptions = {}): P
       reader: `reader ${r.reader} (${r.model})`,
       verified: r.receipt.verified,
       detail: r.receipt.error ?? 'not verified',
+      tee: r.receipt.tee,
+      e2eeFallbackReason: r.receipt.e2ee_fallback_reason,
     })),
+    ledgerCandidates: ledgerCandidates(opts.ledger ?? safeReadLedger(), chain.network, chain.treasury_id),
     registry: chain.registry,
     vendorPolicy: chain.vendor_policy,
     config: chain.config,
