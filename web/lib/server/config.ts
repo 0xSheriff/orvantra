@@ -14,7 +14,7 @@ export const AGENT_DIR = resolve(REPO_ROOT, 'agent');
 const envFile = resolve(REPO_ROOT, '.env');
 if (existsSync(envFile)) dotenv.config({ path: envFile, quiet: true });
 
-export const DEFAULT_TREASURY = 'orvantra-treasury-v4.testnet';
+export const DEFAULT_TREASURY = 'orvantra-treasury-v5.testnet';
 export const DEFAULT_REGISTRY = 'orvantra-registry.testnet';
 
 export interface ServerConfig {

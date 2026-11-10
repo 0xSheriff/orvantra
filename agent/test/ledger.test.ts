@@ -41,6 +41,20 @@ describe('ledger', () => {
     expect(alreadyProposed(l, 'other', 'testnet', 't1')).toBeNull();
   });
 
+  it('upsert clears execution fields when the treasury changes (no false alreadyProposed on a new treasury)', () => {
+    let l = upsert({}, 'h', { file: 'f', network: 'testnet', treasury: 't1' }, { status: 'dry-run' }, T0);
+    l = upsert(l, 'h', { file: 'f', payment_id: 3, tx_hash: 'TX1', deposit_address: 'dep', quote: { quote_hash: 'q', simulated: true } }, { status: 'Pending' }, T1);
+    expect(alreadyProposed(l, 'h', 'testnet', 't1')?.tx_hash).toBe('TX1');
+    l = upsert(l, 'h', { file: 'f', network: 'testnet', treasury: 't2' }, { status: 'analyzed:propose' });
+    expect(l.h.tx_hash).toBeNull();
+    expect(l.h.payment_id).toBeNull();
+    expect(l.h.deposit_address).toBeNull();
+    expect(l.h.quote).toBeUndefined();
+    expect(alreadyProposed(l, 'h', 'testnet', 't2')).toBeNull();
+    l = upsert(l, 'h', { file: 'f', treasury: 't2', tx_hash: 'TX2' }, { status: 'proposed' });
+    expect(alreadyProposed(l, 'h', 'testnet', 't2')?.tx_hash).toBe('TX2');
+  });
+
   it('read/write round trip; missing file = empty ledger; rejects non-objects', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orv-ledger-'));
     const p = join(dir, 'sub', 'ledger.json');

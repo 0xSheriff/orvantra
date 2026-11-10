@@ -68,7 +68,19 @@ export function upsert(ledger: Ledger, hash: string, patch: Partial<LedgerEntry>
     invoice_hash: hash, file: patch.file, network: '', treasury: '', vendor: null, amount: null, invoice_number: null, decision: '',
     created_at: now.toISOString(), statuses: [],
   };
+  // A different treasury for the same invoice is a fresh lifecycle: execution fields (tx,
+  // payment id, deposit address, quote) are specific to the treasury they were sent against.
+  // If they carried over, alreadyProposed would treat the OLD treasury's tx as a proposal to
+  // the NEW one and silently skip sending (e.g. after a treasury redeploy with a new account).
+  const treasuryChanged =
+    patch.treasury !== undefined && prev !== undefined && prev.treasury !== '' && prev.treasury !== patch.treasury;
   const next: LedgerEntry = { ...base, ...patch, invoice_hash: hash, created_at: base.created_at, statuses: [...base.statuses] };
+  if (treasuryChanged) {
+    next.tx_hash = null;
+    next.payment_id = null;
+    next.deposit_address = null;
+    next.quote = undefined;
+  }
   if (status) next.statuses.push({ at: now.toISOString(), ...status });
   return { ...ledger, [hash]: next };
 }
