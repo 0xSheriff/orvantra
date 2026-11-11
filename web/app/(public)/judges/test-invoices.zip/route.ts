@@ -1,4 +1,4 @@
-// The judges' test invoices: agent/fixtures/0*.{png,pdf} + EXPECTED.md, zipped on the fly. Read-only.
+// The judges' test invoices: agent/fixtures/0*.{png,pdf} + the two fresh happy-path invoices (rb-*) + EXPECTED.md, zipped on the fly. Read-only.
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import JSZip from 'jszip';
@@ -7,12 +7,14 @@ import { serverConfig } from '@/lib/server/config';
 export const dynamic = 'force-dynamic';
 
 const FIXTURE = /^0[\w.-]*\.(png|pdf)$/i;
+/** Fresh happy-path invoices (their hashes are not burnt on the live treasuries) — the walkthrough's "clean" files. */
+const FRESH = /^rb-[\w.-]*\.png$/i;
 
 export async function GET(): Promise<Response> {
   const dir = serverConfig().fixturesDir;
   let names: string[];
   try {
-    names = (await readdir(dir)).filter((n) => FIXTURE.test(n) || n === 'EXPECTED.md').sort();
+    names = (await readdir(dir)).filter((n) => FIXTURE.test(n) || FRESH.test(n) || n === 'EXPECTED.md').sort();
   } catch {
     return new Response('The test invoices are not available on this server.', { status: 404 });
   }

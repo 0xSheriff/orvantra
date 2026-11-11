@@ -13,7 +13,9 @@ NEAR to `orvantra-bob.testnet`, policy max 300 / monthly_cap 500, one paid payme
 **Burnt hashes.** The demo runs (`npm run pay`, the web app) have already proposed some of these invoices on the demo
 treasuries, and `propose_payment` burns the `invoice_hash` for good. For such a file the duplicate guard is the real
 rule: the eval then expects **reject** with `invoice_hash already used in the treasury` instead of the row below
-(the table prints `reject (hash used)`). On v4 that is the case for #1 and #3.
+(the table prints `reject (hash used)`). On v4 that is the case for #1 and #3. On the **live v6 treasury** (what the
+web app talks to) #1–#5 are burnt, so the judges' zip ships `rb-acme-normal.png` / `rb-bob-normal.png` (fresh
+invoices for the same vendors) as the happy-path files to upload, while #1–#5 double as the duplicate-guard demo.
 
 | # | File | Invoice | Expected | Why |
 |---|------|---------|----------|-----|

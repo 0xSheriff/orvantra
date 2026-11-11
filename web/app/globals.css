@@ -256,6 +256,31 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 .split .live b { color: var(--d-text); font-weight: 500; }
 .split .live a { color: var(--d-text); text-underline-offset: 2px; }
 
+/* /proof — evidence page (dark half) */
+.split .dark .mid:has(.pf-lede) { max-width: none; }
+.split .pf-lede { font-size: 13.5px; color: var(--d-2); line-height: 1.5; max-width: 560px; margin: 0 0 18px; }
+.split .pf-lede .m { font-size: 12.5px; }
+.split .pf-h2 { margin-top: 44px; }
+.split .pf-group { margin-top: 18px; }
+.split .pf-h { font-family: var(--serif); font-weight: 400; font-size: 21px; color: var(--d-text); margin-bottom: 2px; letter-spacing: -.01em; }
+.split .pf-h em { font-style: normal; color: var(--d-3); font-family: var(--mono); font-size: 13px; }
+.split .pf-sub { font-size: 12.5px; color: var(--d-3); margin-bottom: 10px; }
+.split .pf-rows { list-style: none; border-top: 1px solid var(--d-rule); }
+.split .pf-rows li { display: grid; grid-template-columns: 208px 1fr; gap: 2px 20px; padding: 11px 0; border-bottom: 1px solid var(--d-rule); }
+.split .pf-file { grid-row: 1; font-family: var(--mono); font-size: 12.5px; color: var(--d-text); word-break: break-all; }
+.split .pf-why { grid-column: 2; font-size: 13.5px; color: var(--d-2); line-height: 1.45; }
+.split .pf-tail { grid-column: 1 / -1; grid-row: 3; display: flex; flex-wrap: wrap; gap: 2px 14px; align-items: baseline; }
+.split .pf-hash { font-family: var(--mono); font-size: 11.5px; color: var(--d-3); }
+.split .pf-tail .ok { color: var(--d-3); font-size: 12px; }
+.split .pf-tail .warn { color: var(--amber); font-size: 12px; }
+.split .pf-note { font-size: 12.5px; color: var(--d-3); margin-top: 14px; line-height: 1.5; }
+.split .pf-note .m { font-size: 11.5px; }
+@media (max-width: 640px) {
+  .split .pf-rows li { grid-template-columns: 1fr; }
+  .split .pf-file { grid-row: auto; }
+  .split .pf-why { grid-column: 1; }
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .split .doors i { transition: transform .15s ease-out; }
   .split .doors a:hover i { transform: translateX(3px); }
