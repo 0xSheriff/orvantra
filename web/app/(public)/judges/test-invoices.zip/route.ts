@@ -6,7 +6,7 @@ import { serverConfig } from '@/lib/server/config';
 
 export const dynamic = 'force-dynamic';
 
-const FIXTURE = /^0[\w.-]*\.(png|pdf)$/i;
+const FIXTURE = /^\d+[\w.-]*\.(png|pdf)$/i;
 /** Fresh happy-path invoices (their hashes are not burnt on the live treasuries) — the walkthrough's "clean" files. */
 const FRESH = /^rb-[\w.-]*\.png$/i;
 
