@@ -211,3 +211,12 @@ bumped on the way out and back — by design). The first (B4-interrupted) run di
 
 Agent proposals in this round use `agent/scripts/propose-raw.ts` (`npm run propose-raw`): one `propose_payment` signed
 with the same restricted function-call key as `npm run pay`, invoice_hash = sha256(memo:run id), no invoice.
+
+### Live Rules editor first use (2026-11-11)
+
+The owner used the new Rules page on https://orvantra.up.railway.app/rules with a browser wallet (Meteor,
+`orvantra.testnet`) and approved a vendor directly — the wallet signed `set_vendor_policy` in the browser and the
+treasury accepted it: `orvantra.testnet` ("Orvantra testings") now has a 200.00 / 200.00 policy on v6, visible via
+`get_vendor_policy`. First live use of the editor: browser → wallet → contract, no server ever holds the signature.
+(Exact tx hash not captured here — search `set_vendor_policy` on `orvantra-treasury-v6.testnet` in
+https://testnet.nearblocks.io; the on-chain policy above is the durable proof.)
