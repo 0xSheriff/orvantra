@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { fmtAmount, fmtDuration } from '@/lib/format';
 import { getData } from '@/lib/server/cached';
+import { RulesEditor, type LimitsShape, type VendorEditorRow } from '@/components/RulesEditor';
 
 export const metadata: Metadata = { title: 'Rules & limits' };
 
@@ -9,6 +10,20 @@ export default async function Rules() {
   const c = d.config;
   const u = d.ctx.unit;
   const approved = d.vendors.filter((v) => v.policy);
+  const limits: LimitsShape = c
+    ? {
+        owner: c.owner,
+        treasuryId: d.cfg.treasuryId,
+        auto_pay_threshold: c.auto_pay_threshold,
+        monthly_cap: c.monthly_cap,
+        min_payout_age_sec: c.min_payout_age_sec,
+      }
+    : (null as unknown as LimitsShape);
+  const vendorRows: VendorEditorRow[] = d.vendors.map((v) => ({
+    account: v.account,
+    name: v.registry?.display_name ?? null,
+    policy: v.policy,
+  }));
   return (
     <>
       <div className="ph">
@@ -78,6 +93,7 @@ export default async function Rules() {
               </li>
             </ul>
           </div>
+          <RulesEditor vendors={vendorRows} limits={limits} unit={u} />
           <p className="foot">These rules live in the treasury contract <span className="mono">{d.cfg.treasuryId}</span> on NEAR {d.cfg.network}.</p>
         </>
       )}

@@ -15,7 +15,7 @@ set -euo pipefail
 
 # ------------------------------------------------------------------ accounts (edit these)
 NETWORK=testnet
-OWNER=orvantra-owner.testnet             # the human; owns the tUSDC supply, approves held payments
+OWNER=${OWNER:-orvantra-owner.testnet}      # the human; owns the tUSDC supply, approves held payments (v6: orvantra.testnet)
 AGENT=orvantra-agent.testnet             # the agent account; it will sign ONLY with a function-call key
 # Treasury with the 2026-11-08 security fixes (new state layout): deploy to a FRESH account.
 TREASURY=${TREASURY:-orvantra-treasury-v4.testnet}

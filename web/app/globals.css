@@ -139,6 +139,29 @@ table.list { width: 100%; border-collapse: collapse; margin-top: 8px; }
 .section h2 { font-size: 11px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 500; padding-bottom: 10px; border-bottom: 1px solid var(--rule-2); }
 .meter { display: block; height: 2px; background: var(--rule); margin-top: 6px; width: 120px; margin-left: auto; }
 .meter i { display: block; height: 2px; background: var(--ink); }
+
+/* rules: owner editor — same hairline grammar as .sentences, with inline mono inputs */
+.note { margin-top: 14px; font-size: 13px; color: var(--ink-2); max-width: 760px; }
+.note.warn { color: var(--amber); }
+.editor { max-width: 760px; }
+.editrow { display: grid; grid-template-columns: 1fr auto; gap: 24px; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--rule); }
+.editrow .er-label { display: grid; gap: 4px; }
+.editrow .say { font-family: var(--serif); font-size: 19px; letter-spacing: -.01em; line-height: 1.5; }
+.editrow .why { font-size: 12px; color: var(--muted); max-width: none; text-align: left; }
+.editrow .say input {
+  font-family: var(--mono); font-size: 13px; color: var(--ink); background: var(--sheet);
+  border: 0; border-bottom: 1px solid var(--rule-2); width: 92px; padding: 2px 6px; margin: 0 4px;
+  border-radius: 0; appearance: textfield; -moz-appearance: textfield;
+}
+.editrow .say input::-webkit-outer-spin-button, .editrow .say input::-webkit-inner-spin-button { -webkit-appearance: none; }
+.editrow .say input:focus { outline: none; border-bottom-color: var(--ink); }
+.er-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.btn.mini { flex: none; font-family: var(--sans); font-size: 12px; font-weight: 500; padding: 8px 14px; min-height: 36px; border: 1px solid var(--ink); background: var(--ink); color: var(--paper); cursor: pointer; }
+.btn.mini:hover:not(:disabled) { background: var(--ink-2); border-color: var(--ink-2); }
+.btn.mini.ghost { background: transparent; color: var(--ink-2); border-color: var(--rule-2); }
+.btn.mini.ghost:hover:not(:disabled) { border-color: var(--red); color: var(--red); background: transparent; }
+.btn.mini:disabled { cursor: not-allowed; opacity: .45; }
+.btn.mini:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
 .meter.hot i { background: var(--amber); }
 
 /* upload progress dialog */
