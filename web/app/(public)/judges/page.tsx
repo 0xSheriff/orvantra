@@ -30,8 +30,8 @@ export default function Judges() {
           <Link className="back" href="/"><span className="ar" aria-hidden="true">←</span> Home</Link>
           <h1 className="display judges">Try it in five steps.</h1>
           <p className="lede">
-            Everything runs on NEAR {network} against the deployed contracts. Each step says what to do and what you
-            should see.
+            Everything runs on NEAR {network} against <M>{treasuryId}</M>. Each step says what to do and what you
+            should see. The test invoices&rsquo; hashes are unique, so the same files behave the same on every try.
           </p>
           <nav className="doors links" aria-label="Resources">
             <a href="/judges/test-invoices.zip" download>
@@ -60,14 +60,15 @@ export default function Judges() {
         <div className="mid">
           <h2 className="lbl">Do this <span className="ar">→</span> see that</h2>
           <ol className="steps checks">
-            <li><span>Open the app and connect a {network} wallet<small><Ar />owner view; approving needs the treasury owner. Uploads are public on this demo.</small></span></li>
-            <li><span>Upload <M>04-acme-changed-bank.png</M><small><Ar />held: &quot;This invoice asks you to pay someone else&quot;</small></span></li>
-            <li><span>Upload <M>03-bob-small.png</M><small><Ar />paid automatically, direct to bob on NEAR</small></span></li>
-            <li><span>Upload the same invoice again<small><Ar />stopped as a duplicate, nothing sent</small></span></li>
-            <li><span>Run <M>npm run prove-key-limits</M> in <M>agent/</M><small><Ar />4 / 4 refused: the agent key can only propose</small></span></li>
+            <li><span>Open the app and connect a {network} wallet<small><Ar />owner view is <M>orvantra.testnet</M>; anyone can upload and watch the stream</small></span></li>
+            <li><span>Upload <M>rb-acme-normal.png</M><small><Ar />proposed: two TEE readers agree, 1Click quote verified, payment Pending with the cross-chain reason</small></span></li>
+            <li><span>Upload <M>14-acme-implicit-redirect.png</M><small><Ar />held: &quot;invoice asks to pay a different address — registry is the source of truth&quot;</small></span></li>
+            <li><span>Upload <M>01-acme-normal.png</M><small><Ar />rejected before signing: its invoice hash is already on-chain (duplicate guard)</small></span></li>
+            <li><span>Run <M>npm run prove-key-limits</M> in <M>agent/</M><small><Ar />4 / 4 refused by the network: the agent key can only propose</small></span></li>
           </ol>
+          <p className="pf-note">Every claim, with tx links and the full 15-fixture verdict table: <Link href="/proof">proof of everything →</Link></p>
         </div>
-        <footer className="foot">Questions: see the README&apos;s judging section</footer>
+        <footer className="foot">Questions: see the README&apos;s &ldquo;Do this → see this&rdquo; section</footer>
       </section>
     </div>
   );

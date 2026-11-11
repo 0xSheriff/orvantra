@@ -10,44 +10,55 @@ An accounts-payable team gets an invoice. Orvantra reads it privately on NEAR AI
 
 ## Do this → see this (for judges)
 
-The live demo runs on **NEAR testnet** with a real owner wallet and a real restricted agent key. Test data for every case below is in `agent/fixtures/` (15 images/PDFs: clean, fraud and edge cases) with expected verdicts in `agent/fixtures/EXPECTED.md`.
+The live app talks to treasury **`orvantra-treasury-v6.testnet`** (owner `orvantra.testnet`) and registry **`orvantra-registry.testnet`**. Test invoices are in `agent/fixtures/` (15 numbered cases + 2 fresh happy-path files) with expected verdicts in `agent/fixtures/EXPECTED.md`; the site also serves the whole pack at https://orvantra.up.railway.app/judges/test-invoices.zip.
 
-### 1. Happy path — upload an invoice, watch it get proposed
-**Do:** open https://orvantra.up.railway.app, connect a testnet wallet (any testnet account works; the owner role is `orvantra.testnet`), upload `agent/fixtures/01-acme-normal.png` (a $120 invoice from Acme).
-**See:** an NDJSON stream as it happens:
-- two NEAR AI Cloud readers (Qwen3-VL and GLM-5.3, both **provider TEE-attested, E2EE on**) independently extract vendor / invoice no. / total / currency / due date; their readings and TEE signatures are shown
-- the agent compares the extracted vendor account against the on-chain registry (`orvantra-registry.testnet`) and the payout address against the vendor's self-registered payout (version-checked)
-- a 1Click cross-chain quote is fetched, **its signature is verified**, and every routing field is checked against the registry payout
-- the agent signs `propose_payment` with its function-call key (nothing else is allowed) — the treasury contract puts the payment in **Pending** with on-chain reasons
-- in the web app the owner sees the pending payment, the quote, and the registry payout it must match; approving signs in **the owner's own wallet** (never the server), and the contract pays (testnet: tUSDC to the simulated 1Click deposit address; mainnet: to the 1Click deposit address)
+**One rule to know:** `propose_payment` burns each invoice's hash forever, so an invoice already proposed on the live treasury is rejected on re-upload — that is the duplicate guard working, not an error. The happy-path files below are the *fresh* ones; most numbered files #1–#5 are already on the live treasury and now double as the duplicate-guard demo.
 
-The real recorded run of this exact case (2026-11-10): tx `5JRMF8W2xKQMPVdgHf6xA5MNPCjZsLAGs48PrGNzvxEm`, payment #1 Pending on `orvantra-treasury-v4.testnet`, both readers `VERIFIED`.
+### 1. Happy path — clean invoice, cross-chain
+**Do:** open https://orvantra.up.railway.app, connect any testnet wallet, upload `rb-acme-normal.png` (a fresh $50 Acme invoice, hash not yet on-chain).
+**See:** the NDJSON stream — two NEAR AI Cloud readers (Qwen3-VL + GLM-5.3, both **provider TEE-attested, E2EE**, response signatures verified) agree on vendor / invoice no. / total / currency / due date; the registry payout is matched version-checked; the 1Click quote is fetched and **its signature is verified**, every routing field checked against the registry payout; `propose_payment` is signed with the function-call key. The payment lands **Pending** with the on-chain reason `will be held by contract: cross-chain payout, you confirm the 1Click deposit address`.
 
-### 2. "Changed bank details" fraud — invoice names a new address
-**Do:** upload `agent/fixtures/04-acme-changed-bank.png` (Acme's invoice, but it says "pay the new address 0x…").
-**See:** the payment is **held/Pending** with the on-chain reason `agent: invoice asks to pay a different address than the registry` — even though every field matches. The treasury can only ever pay the registry address; the new address is ignored.
+### 2. Happy path — clean invoice, same-chain auto-pay
+**Do:** upload `rb-bob-normal.png` (a fresh $20 Bob invoice; the auto-pay threshold is 100.00, Bob pays on NEAR).
+**See:** same stream, then the treasury **pays immediately on-chain** — `ft_transfer` of tUSDC directly to `orvantra-bob.testnet`, payment marked **Paid** with the tx in the activity feed. No owner approval needed — that is the point of the threshold.
 
-### 3. Duplicate invoice — pay the same invoice twice
-**Do:** re-upload `01-acme-normal.png` (or any previously processed fixture) once a payment for it already exists, or upload `agent/fixtures/05-acme-duplicate.png`.
-**See:** the agent rejects it **before any transaction** (normalized invoice-number + amount + vendor already used); the treasury contract independently rejects a reused `invoice_hash` on-chain.
+### 3. Fraud — "our payout address changed"
+**Do:** upload `14-acme-implicit-redirect.png` (Acme's invoice, but it asks you to pay a 64-hex implicit account instead).
+**See:** the payment is **proposed with a hold** — on-chain reason `agent: invoice asks to pay a different address — ignored; registry is the source of truth`. The treasury can only ever pay the registry address; the planted address is discarded. (Verified live against v6 on 2026-11-11.)
 
-### 4. Over limit — bigger than the policy allows
-**Do:** upload `agent/fixtures/06-acme-inflated.png` (a much larger amount), or call the treasury with an amount above `max_per_invoice` / the rolling 30-day vendor cap.
-**See:** the contract **rejects the transaction** (visible on the explorer as a failed call): `Amount exceeds max_per_invoice` / vendor cap exceeded. Cross-chain payouts additionally never auto-pay (threshold 0) — they always require owner approval.
+### 4. Duplicate — the same invoice twice
+**Do:** upload `01-acme-normal.png` (already proposed on the live treasury by an earlier demo run).
+**See:** rejected **before any transaction is signed**: `invoice_hash already used in the treasury (duplicate invoice)`. Steps 3–5 of the pipeline show skipped; nothing is sent. (The live UI shows exactly this: step 2 "Checking registry and limits → reject", steps 3–4 skipped, "Stopped. Nothing was sent.")
 
-### 5. Unknown vendor — invoice from someone not registered
-**Do:** upload `agent/fixtures/07-unknown-vendor.png`.
-**See:** the agent holds it: no registry entry → no known payout → nothing is proposed.
+### 5. The proof page — every claim, with links
+**Do:** open https://orvantra.up.railway.app/proof.
+**See:** all 15 fixture verdicts fetched live from the eval's JSON (both-reader TEE/E2EE verification per row), the five on-chain contract refusals with explorer tx links, and the mainnet NEAR→Base proof. Nothing on the page is a screenshot.
 
-### 6. The agent key cannot do anything but propose
-**Do:** `cd agent && npm run prove-key-limits` (uses the live v4 testnet key).
-**See:** 4/4 calls **refused by the network** with `InvalidAccessKeyError`: `set_limits`, treasury `withdraw`, token `ft_transfer`, and a plain NEAR transfer. The key's on-chain permission is receiver = treasury, method = `propose_payment` only, 0.25 NEAR allowance.
+### 6. Owner rules — three states of one page
+**Do:** open https://orvantra.up.railway.app/rules three ways: with no wallet; with a non-owner testnet wallet; with the owner wallet `orvantra.testnet`.
+**See:** (a) a "connect the owner wallet" prompt; (b) the current rules in read-only with `Only orvantra.testnet can change these rules`; (c) a full editor — `set_limits`, `set_vendor_policy`, `remove_vendor_policy` — where each save is signed in **the browser's own wallet** and the server never holds the signature. Enforcement is in the contract (`assert_owner_full_access`); the page is only the surface. The owner has used this live (the `orvantra.testnet` 200/200 vendor policy on v6 was set through it — see `docs/DEPLOYMENTS.md`).
 
-### 7. Vendors control their own payout (and can't change someone else's)
-**Do:** open the vendor page (linked from the app), or run the registry e2e: `bash scripts/testnet-day5.sh` from a machine with the testnet keys.
-**See:** `orvantra-acme.testnet` sets its own payout; `orvantra-bob.testnet` cannot modify Acme's entry (contract checks `predecessor_account_id`); payout changes bump the registry `version` and any payment referencing the old version is held; EVM addresses are validated (`0x` + 40 hex). New entries take a small **refundable storage deposit** so entries can't be spammed.
+### 7. Cross-chain delivery, proven on mainnet
+**Do:** open the two transactions below.
+**See:** 0.45 NEAR left `orvantra.near` (NEAR mainnet) and 1.607589 USDC arrived on Base via NEAR Intents (1Click): [NEAR tx](https://explorer.near.org/transactions/AD8QDvGKJTx8f3sjQM5XB9GYaiXrisAXRzYewAy4Lo7n) + [Base tx](https://basescan.org/tx/0x4abc3615397620258189036353e909f47044ba784461c8c8c0ed7003fdeac3fb). Intents is mainnet-only (Q-007), so the product flow itself is testnet (Q-010) — this proves the delivery primitive end to end.
 
-### 8. Tests
+### 8. The agent key can only propose
+**Do:** `cd agent && npm run prove-key-limits` (no secrets needed; uses the agent's default treasury v4).
+**See:** 4/4 attempts **refused by the network** with `InvalidAccessKeyError` — `set_limits`, treasury `withdraw`, token `ft_transfer`, plain NEAR transfer. The on-chain key permission is receiver = treasury, method = `propose_payment`, ~0.25 NEAR allowance (visible on the [agent account page](https://testnet.nearblocks.io/accounts/orvantra-agent.testnet)).
+
+### 9. The contract refuses the agent — five real transactions
+**Do:** read the Round B section of `docs/DEPLOYMENTS.md` (or the same table on the /proof page).
+**See:** on the live treasury, real `propose_payment` transactions that **failed on-chain**: `over vendor monthly cap` ([tx](https://testnet.nearblocks.io/txns/Ak4forTB56S6DQsaZUaJNFWaDMfY37ah2jn3NgoPxSWt)), `over treasury monthly cap` ([tx](https://testnet.nearblocks.io/txns/H3XvhxzgPxYaEe8nb3pkdu82n4kWrSNb8yCzZsFQ45vL)), `treasury is paused` ([tx](https://testnet.nearblocks.io/txns/CkniDBhcZsfPygkNeFCaPPfcDK4sPV541s8RQhvVzQxd)), plus the payout-age hold prediction and an agent-side reject after `remove_vendor_policy` — every setting restored afterwards.
+
+### 10. Reproduce the eval — 15 fixtures, real TEE readers
+**Do:** `cd agent && npm i && npm run eval` (needs `NEARAI_API_KEY` in the repo `.env`).
+**See:** `15/15 PASS` — every fixture through both attested readers + live chain views against the eval's target treasury `orvantra-treasury-v4.testnet` (the agent's default; a stable archive of demo state, separate from the live v6 app). Expected vs actual per fixture is printed, with the verdict reason that must match.
+
+### 11. Vendors control their own payout
+**Do:** register at https://orvantra.up.railway.app/register with any testnet wallet, or inspect the [registry account page](https://testnet.nearblocks.io/accounts/orvantra-registry.testnet).
+**See:** vendors set their own payout (chain, token, address); a payout change bumps the registry `version` and any payment referencing the old version is held by the contract; entries carry a small refundable storage deposit so they can't be spammed; `orvantra-bob.testnet` cannot modify Acme's entry — the contract checks `predecessor_account_id`.
+
+### 12. Tests
 **Do:**
 ```bash
 cd contracts && cargo test        # 209 tests (treasury 162 + vendor-registry 40 + test-token 7)
@@ -55,10 +66,6 @@ cd agent && npm ci && npm test    # 298 tests (extraction, checks, 1Click valida
 cd web && npm ci && npm test      # 117 tests (Next.js app)
 ```
 **See:** all green. Contract tests run the full policy engine with near-workspaces: auto-pay under threshold, Pending over threshold, duplicate-hash rejection, per-invoice cap, rolling 30-day vendor cap, payout-version holds, agent-flag holds, `max_open_payments`, `near_reserve` withdrawal floor.
-
-### 9. Round B — every rule, live
-**Do:** `cd agent && npm run eval` (15 fixtures through both TEE readers + live testnet views; needs `NEARAI_API_KEY`), then `bash scripts/testnet-roundB.sh` from a machine with the testnet keys.
-**See:** `15/15 PASS` — credit note, over `max_per_invoice`, registered-but-unapproved vendor, vendor-name mismatch, possible duplicate (same number, other amount), bank details on the invoice, implicit-account redirect and an invoice with no NEAR account at all each get the documented verdict. The script then makes the **contract itself** refuse the agent on the live treasury (`over vendor monthly cap`, `over treasury monthly cap`, `treasury is paused`), shows the payout-age hold prediction and the agent rejecting a vendor whose policy was removed, and restores every setting before it exits (tx hashes in `docs/DEPLOYMENTS.md`, Round B section).
 
 ---
 
@@ -103,10 +110,12 @@ cd web && npm ci && npm test      # 117 tests (Next.js app)
 
 All decisions are enforced **in the contracts**, not the agent. The agent can only make the system *stricter* (hold flags); it cannot pay, approve, withdraw, or loosen policy.
 
+**Verdict vocabulary:** `propose` = the agent signs `propose_payment` (the contract may still hold it). `hold` = proposed *with* agent flags — it lands Pending and the owner sees the reason before approving. `reject` = nothing is signed, nothing is proposed. All three are re-checked independently by the contract.
+
 ### NEAR technologies used
 - **NEAR AI Cloud (TEE)** — invoice content goes only to NEAR AI Cloud: two models from different families, provider TEE attestation, end-to-end encryption to the attested model key, per-response signature verification via `@nearai/inference-sdk`. No third-party LLM ever sees invoices.
 - **Rust smart contracts** (`near-sdk 5.30`) — `vendor-registry` and `treasury`, each a normal NEAR contract.
-- **Function-call access keys** — the agent key is scoped to `propose_payment` on one treasury with a 0.25 NEAR allowance; verified on-network (case 6).
+- **Function-call access keys** — the agent key is scoped to `propose_payment` on one treasury with a 0.25 NEAR allowance; verified on-network (case 8).
 - **Meta transactions + relayer** — vendors register/update payout gaslessly; the relayer's key is constrained to pay only for calls to our registry, with key/nonce/rate checks.
 - **NEAR Intents (1Click)** — cross-chain stablecoin delivery; the agent verifies the quote signature and every routing field before proposing.
 - **Named accounts** — invoices reference `acme.near`, not raw addresses.
@@ -116,15 +125,15 @@ All decisions are enforced **in the contracts**, not the agent. The agent can on
 
 ## Honest limits (read these)
 
-- **Testnet is primary.** The live demo runs on NEAR testnet with a test treasury (`orvantra-treasury-v4.testnet`), test funds, and a real restricted agent key. NEAR Intents is mainnet-only, so on testnet the cross-chain deposit is **simulated**: a real 1Click quote proves price and signature, but the tUSDC goes to a stand-in account. Same-chain payouts are fully real on-chain.
-- **Two real mainnet 1Click swaps exist as a bonus (owner-wallet, not product payments):** the owner's wallet ran a genuine NEAR → Base swap (0.45 NEAR → 1.607589 USDC) and the reverse Base → NEAR swap (1.607589 USDC → ~0.45 NEAR), each a real 1Click quote with verified signature and a plain deposit to the quote address. They prove the cross-chain delivery primitive works on mainnet in both directions. No Orvantra contracts are deployed on mainnet and the automated AP flow (invoice → TEE readers → registry → treasury proposal → owner approval) is testnet-only. Details in `docs/DEPLOYMENTS.md`.
+- **Testnet is primary.** The live app runs on `orvantra-treasury-v6.testnet` with test funds and a real restricted agent key; the reproducible eval (case 10) targets `orvantra-treasury-v4.testnet`, a stable archive of earlier demo state. NEAR Intents has no testnet, so cross-chain payouts on testnet are **simulated at the last hop**: a real 1Click quote proves price and signature, but the tUSDC goes to a stand-in account. Same-chain payouts are fully real on-chain. Testnet-only projects are eligible (Q-010).
+- **Two real mainnet 1Click swaps exist as a bonus (owner-wallet, not product payments):** NEAR → Base (0.45 NEAR → 1.607589 USDC) and the reverse Base → NEAR, each a real 1Click quote with verified signature and a plain deposit to the quote address. No Orvantra contracts are deployed on mainnet. Details in `docs/DEPLOYMENTS.md`.
 - **1Click deposit address verification is off-chain in v1.** The quote signature and recipient are verified off-chain; the contract caps a compromised agent's damage to the auto-pay limit (0 for cross-chain, so zero).
 - **No fiat off-ramp.** Vendors receive stablecoins.
 - **The 0.25 NEAR key allowance limits gas, not payments.** Payments are limited by treasury policy.
 
 ## What AI was used for
 
-Built solo with AI coding assistance (Claude Code, plus Hermes Agent for orchestration and reviews); all code reviewed and tested as above. **Invoice content is processed exclusively by NEAR AI Cloud TEE models** (Qwen3-VL, GLM-5.3) — the AI that reads your invoices is the platform's own attested inference; no invoice data goes to any other AI service.
+Built solo with AI coding assistance (Claude Code + Hermes Agent for orchestration and reviews); all code reviewed and tested as above. **Invoice content is processed exclusively by NEAR AI Cloud TEE models** (Qwen3-VL, GLM-5.3) — the AI that reads your invoices is the platform's own attested inference; no invoice data goes to any other AI service.
 
 ## Repository layout
 
@@ -133,9 +142,12 @@ contracts/vendor-registry/   Rust — vendor → payout mapping, self-service wi
 contracts/treasury/          Rust — spending policy, propose/approve/reject, payout execution
 contracts/test-token/        Rust — NEP-141 tUSDC for tests
 agent/                       TypeScript — intake, TEE extraction, checks, 1Click, propose
-  scripts/mainnet-quote.ts   one-off real mainnet 1Click quote (demo bonus)
   fixtures/                  demo invoices (incl. fraud cases) + EXPECTED.md
-web/                         Next.js — upload, live stream, pending payments, owner approve
+  scripts/prove-key-limits.ts  live proof the agent key can only propose
+  scripts/mainnet-quote.ts   one-off real mainnet 1Click quote (demo bonus)
+web/                         Next.js — upload, live stream, pending approvals, rules editor, /judges, /proof
+web/scripts/copy-eval-results.mjs  ships agent/eval-results.json to the /proof page
+scripts/testnet-roundB.sh    the five on-chain contract-refusal demos (restore everything)
 docs/ARCHITECTURE.md         design decisions and walkthrough
 docs/DEPLOYMENTS.md          deployment log, live-verified runs, tx hashes
 docs/security/REVIEW-2026-11-08.md   three-reviewer security audit + fixes
@@ -145,8 +157,8 @@ docs/security/REVIEW-2026-11-08.md   three-reviewer security audit + fixes
 
 ```bash
 cd contracts && cargo build && cargo test
-cd agent && npm ci && npm run pay -- fixtures/01-acme-normal.png   # needs testnet keys + .env
-cd web   && npm ci && npm run dev
+cd agent && npm ci && npm run analyze -- fixtures/rb-acme-normal.png   # needs .env (read-only, signs nothing)
+cd web && npm ci && npm run dev
 ```
 
 Secrets live in `.env` only (NEAR AI API key, optional Fortytwo/1Click keys) and are never committed.

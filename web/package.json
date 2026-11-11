@@ -9,6 +9,7 @@
   },
   "scripts": {
     "dev": "next dev",
+    "prebuild": "node scripts/copy-eval-results.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",

@@ -68,6 +68,7 @@ export default async function Home() {
         <nav className="top menu" aria-label="Site">
           <a href={links.vendorUrl}>For vendors</a>
           <Link href="/judges">For judges</Link>
+          <Link href="/proof">Proof</Link>
           {links.repoUrl ? <a href={links.repoUrl}>GitHub</a> : null}
           <Link className="open" href="/review">Open app</Link>
         </nav>
