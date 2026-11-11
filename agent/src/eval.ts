@@ -27,7 +27,18 @@ export const EXPECTED: Record<string, Expectation> = {
   '05-acme-duplicate.png': { action: 'reject', reason: 'duplicate of 01-acme-normal.png', sameHashAs: '01-acme-normal.png' },
   '06-acme-inflated.png': { action: 'hold', reason: 'line items sum to 30.00 USDC but the total is 300.00 USDC' },
   '07-unknown-vendor.png': { action: 'reject', reason: 'not in the vendor registry' },
+  '08-acme-credit-note.png': { action: 'reject', reason: 'a credit note' },
+  '09-acme-over-max.png': { action: 'reject', reason: 'max_per_invoice' },
+  '10-unapproved-vendor.png': { action: 'reject', reason: 'not approved in the treasury policy' },
+  '11-acme-name-mismatch.png': { action: 'hold', reason: 'registered as' },
+  '12-bob-possible-duplicate.png': { action: 'hold', reason: 'possible duplicate of B-0008' },
+  '13-acme-bank-details.png': { action: 'hold', reason: 'bank/payment details' },
+  '14-acme-implicit-redirect.png': { action: 'hold', reason: 'invoice asks to pay a different address' },
+  '15-near-less-invoice.png': { action: 'reject', reason: 'no vendor NEAR account' },
 };
+// Once a fixture has been proposed on the target treasury (the demo runs do that), its hash is burnt there and the
+// duplicate guard rejects it whatever the table says: that is then the expected outcome (see fixtures/EXPECTED.md).
+const USED: Expectation = { action: 'reject', reason: 'invoice_hash already used in the treasury' };
 
 const files = (await readdir(FIXTURES)).filter((f) => /^\d\d-.*\.(png|jpe?g|pdf)$/i.test(f)).sort();
 const seen = new Map<string, string>();
@@ -43,7 +54,9 @@ const hashOf = (f: string) => results.find((r) => r.file === f)?.a.decision.invo
 const rows: string[][] = [['file', 'A total', 'B total', 'agree', 'verified', 'decision', 'expected', 'result']];
 let pass = 0;
 for (const { file, a } of results) {
-  const exp = EXPECTED[file];
+  const table = EXPECTED[file];
+  const used = !!table && table.action !== 'reject' && a.chain.invoice_used;
+  const exp = used ? { ...USED, sameHashAs: table.sameHashAs } : table;
   const [na, nb] = a.normalized;
   const verified = a.reading.readers.map((r) => (r.receipt.verified ? r.receipt.signature_kind : 'NO')).join('/');
   const problems: string[] = [];
@@ -61,7 +74,7 @@ for (const { file, a } of results) {
     a.comparison.agree ? 'yes' : 'NO',
     verified,
     a.decision.action,
-    exp?.action ?? '?',
+    used ? 'reject (hash used)' : exp?.action ?? '?',
     problems.length ? `FAIL (${problems.join('; ')})` : 'PASS',
   ]);
 }
