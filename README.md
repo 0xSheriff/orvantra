@@ -10,7 +10,7 @@ An accounts-payable team gets an invoice. Orvantra reads it privately on NEAR AI
 
 ## Do this → see this (for judges)
 
-The live demo runs on **NEAR testnet** with a real owner wallet and a real restricted agent key. Test data for every case below is in `agent/fixtures/` (images/PDFs) with expected verdicts in `agent/fixtures/EXPECTED.md`.
+The live demo runs on **NEAR testnet** with a real owner wallet and a real restricted agent key. Test data for every case below is in `agent/fixtures/` (15 images/PDFs: clean, fraud and edge cases) with expected verdicts in `agent/fixtures/EXPECTED.md`.
 
 ### 1. Happy path — upload an invoice, watch it get proposed
 **Do:** open https://orvantra.up.railway.app, connect a testnet wallet (any testnet account works; the owner role is `orvantra.testnet`), upload `agent/fixtures/01-acme-normal.png` (a $120 invoice from Acme).
@@ -55,6 +55,10 @@ cd agent && npm ci && npm test    # 298 tests (extraction, checks, 1Click valida
 cd web && npm ci && npm test      # 117 tests (Next.js app)
 ```
 **See:** all green. Contract tests run the full policy engine with near-workspaces: auto-pay under threshold, Pending over threshold, duplicate-hash rejection, per-invoice cap, rolling 30-day vendor cap, payout-version holds, agent-flag holds, `max_open_payments`, `near_reserve` withdrawal floor.
+
+### 9. Round B — every rule, live
+**Do:** `cd agent && npm run eval` (15 fixtures through both TEE readers + live testnet views; needs `NEARAI_API_KEY`), then `bash scripts/testnet-roundB.sh` from a machine with the testnet keys.
+**See:** `15/15 PASS` — credit note, over `max_per_invoice`, registered-but-unapproved vendor, vendor-name mismatch, possible duplicate (same number, other amount), bank details on the invoice, implicit-account redirect and an invoice with no NEAR account at all each get the documented verdict. The script then makes the **contract itself** refuse the agent on the live treasury (`over vendor monthly cap`, `over treasury monthly cap`, `treasury is paused`), shows the payout-age hold prediction and the agent rejecting a vendor whose policy was removed, and restores every setting before it exits (tx hashes in `docs/DEPLOYMENTS.md`, Round B section).
 
 ---
 
