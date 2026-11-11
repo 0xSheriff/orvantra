@@ -10,7 +10,7 @@ export async function Sidebar() {
   const unit = d.ctx.unit;
   return (
     <aside className="side" aria-label="Orvantra">
-      <Link className="brand" href="/review"><Mark size={26} /><span>Orvantra<small>Accounts payable</small></span></Link>
+      <Link className="brand" href="/"><Mark size={26} /><span>Orvantra<small>Accounts payable</small></span></Link>
       <NavList counts={{ approval: d.pending.length, invoices: d.counts.all, vendors: d.vendors.filter((v) => v.policy).length }} />
       <div className="sidefoot">
         <WalletStatus owner={d.config?.owner ?? null} />
