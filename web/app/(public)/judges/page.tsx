@@ -25,6 +25,7 @@ export default function Judges() {
       <section className="half light">
         <header className="top">
           <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
+          <Link className="opentop" href="/invoices">Open app</Link>
         </header>
         <main className="mid" id="main">
           <Link className="back" href="/"><span className="ar" aria-hidden="true">←</span> Home</Link>
@@ -56,7 +57,6 @@ export default function Judges() {
 
       <section className="half dark" aria-label="Do this, see that">
         <nav className="top menu" aria-label="Site">
-          <Link className="open" href="/review">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">Do this <span className="ar">→</span> see that</h2>

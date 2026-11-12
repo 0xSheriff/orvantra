@@ -78,6 +78,7 @@ export default function Proof() {
       <section className="half light">
         <header className="top">
           <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
+          <Link className="opentop" href="/invoices">Open app</Link>
         </header>
         <main className="mid" id="main">
           <Link className="back" href="/"><span className="ar" aria-hidden="true">←</span> Home</Link>
@@ -107,7 +108,6 @@ export default function Proof() {
       <section className="half dark" aria-label="Evidence">
         <nav className="top menu" aria-label="Site">
           <Link href="/judges">Try it in steps</Link>
-          <Link className="open" href="/review">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">1 · The eval — 15 invoices, two TEE readers, live chain views</h2>

@@ -35,6 +35,7 @@ export default async function Home() {
       <section className="half light">
         <header className="top">
           <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
+          <Link className="opentop" href="/invoices">Open app</Link>
         </header>
         <main className="mid" id="main">
           <h1 className="display">Accounts payable, engineered for trust.</h1>
@@ -70,7 +71,6 @@ export default async function Home() {
           <Link href="/judges">For judges</Link>
           <Link href="/proof">Proof</Link>
           {links.repoUrl ? <a href={links.repoUrl}>GitHub</a> : null}
-          <Link className="open" href="/review">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">How it works</h2>
