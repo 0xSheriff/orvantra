@@ -1,6 +1,6 @@
 // Footer social icons (GitHub + X) for the public split pages.
 const GITHUB_FALLBACK = 'https://github.com/0xSheriff';
-const X_URL = 'https://x.com/0xSheriff';
+const X_URL = 'https://x.com/0xearthh';
 
 /**
  * GitHub icon targets the public repo when one is configured
