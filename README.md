@@ -10,7 +10,7 @@ An accounts-payable team gets an invoice. Orvantra reads it privately on NEAR AI
 
 ## Do this → see this (for judges)
 
-The live app talks to treasury **`orvantra-treasury-v6.testnet`** (owner `orvantra.testnet`) and registry **`orvantra-registry.testnet`**. Test invoices are in `agent/fixtures/` (15 numbered cases + 2 fresh happy-path files) with expected verdicts in `agent/fixtures/EXPECTED.md`; the site also serves the whole pack at https://orvantra.up.railway.app/judges/test-invoices.zip.
+The live app talks to treasury **`orvantra-treasury-v6.testnet`** (owner `orvantra.testnet`) and registry **`orvantra-registry.testnet`**. The judges' download at https://orvantra.up.railway.app/judges/test-invoices.zip ships ten **fresh** invoices from three vendors you won't find on the All invoices page (NovaTech Labs, GreenLeaf Co, PixelWorks Studio) with expected verdicts in the zip's `EXPECTED.md` — none have been processed on any treasury before you open it. The full 15-case eval pack with fraud/duplicate fixtures is in `agent/fixtures/` (expected verdicts in `agent/fixtures/EXPECTED.md`).
 
 **One rule to know:** `propose_payment` burns each invoice's hash forever, so an invoice already proposed on the live treasury is rejected on re-upload — that is the duplicate guard working, not an error. The happy-path files below are the *fresh* ones; most numbered files #1–#5 are already on the live treasury and now double as the duplicate-guard demo.
 

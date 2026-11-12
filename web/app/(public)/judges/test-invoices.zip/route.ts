@@ -1,4 +1,6 @@
-// The judges' test invoices: agent/fixtures/0*.{png,pdf} + the two fresh happy-path invoices (rb-*) + EXPECTED.md, zipped on the fly. Read-only.
+// The judges' test invoices: the FRESH judge set in agent/fixtures-judges/ (10 clean invoices from
+// NovaTech Labs, GreenLeaf Co and PixelWorks Studio — never processed on any treasury, and separate
+// from the four live invoices on the All invoices page) + EXPECTED.md, zipped on the fly. Read-only.
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import JSZip from 'jszip';
@@ -7,14 +9,12 @@ import { serverConfig } from '@/lib/server/config';
 export const dynamic = 'force-dynamic';
 
 const FIXTURE = /^\d+[\w.-]*\.(png|pdf)$/i;
-/** Fresh happy-path invoices (their hashes are not burnt on the live treasuries) — the walkthrough's "clean" files. */
-const FRESH = /^rb-[\w.-]*\.png$/i;
 
 export async function GET(): Promise<Response> {
-  const dir = serverConfig().fixturesDir;
+  const dir = serverConfig().judgesFixturesDir;
   let names: string[];
   try {
-    names = (await readdir(dir)).filter((n) => FIXTURE.test(n) || FRESH.test(n) || n === 'EXPECTED.md').sort();
+    names = (await readdir(dir)).filter((n) => FIXTURE.test(n) || n === 'EXPECTED.md').sort();
   } catch {
     return new Response('The test invoices are not available on this server.', { status: 404 });
   }
@@ -26,7 +26,8 @@ export async function GET(): Promise<Response> {
     headers: {
       'content-type': 'application/zip',
       'content-disposition': 'attachment; filename="orvantra-test-invoices.zip"',
-      'cache-control': 'public, max-age=300',
+      // The zip content is refreshed per round — never serve a stale copy.
+      'cache-control': 'no-store',
     },
   });
 }
