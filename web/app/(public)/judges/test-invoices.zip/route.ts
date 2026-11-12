@@ -1,6 +1,6 @@
 // The judges' test invoices: the FRESH judge set in agent/fixtures-judges/ (10 clean invoices from
 // NovaTech Labs, GreenLeaf Co and PixelWorks Studio — never processed on any treasury, and separate
-// from the four live invoices on the All invoices page) + EXPECTED.md, zipped on the fly. Read-only.
+// from the 14 live invoices on the All invoices page) + EXPECTED.md, zipped on the fly. Read-only.
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import JSZip from 'jszip';

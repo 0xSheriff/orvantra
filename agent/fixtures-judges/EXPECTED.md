@@ -3,8 +3,9 @@
 These 10 invoices are **fresh**: three vendors you have never seen on the All invoices page — **NovaTech Labs**
 (`orvantra-novatech.testnet`), **GreenLeaf Co** (`orvantra-greenleaf.testnet`) and **PixelWorks Studio**
 (`orvantra-pixelworks.testnet`) — with invoice numbers and amounts that have never been proposed on any treasury.
-Nothing in this zip has been processed, demoed or burnt before you open it. They are separate from the four
-invoices on the All invoices page (Acme INV-2026-0142 / INV-2026-0150, Bob B-0007 / B-0008).
+Nothing in this zip has been processed, demoed or burnt before you open it. They are separate from the 14
+invoices on the All invoices page (the original Acme / Bob set, plus the ten Harbor & Oak, Cloudline and
+Meridian invoices).
 
 All vendors are registered in the vendor registry with their **own** payout details (tUSDC on NEAR, to their own
 account), and the owner has approved each in the treasury policy (max_per_invoice 300, monthly_cap 600).
