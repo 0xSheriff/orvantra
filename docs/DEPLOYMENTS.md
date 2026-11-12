@@ -248,3 +248,40 @@ files + `EXPECTED.md`, and nothing else — separate from the four live invoices
 One transient note: on the local Mac one run of `08-pixelworks-brand.png` held on "end-to-end encryption failed"
 (hotspot can't reach the attestation endpoints); the immediate re-run proposed cleanly — same E2EE caveat as the
 v6.1 entry, Railway runs unaffected.
+
+## 2026-11-12 — Round D (v6.5): 3 new vendors + 10 live invoices on the All invoices page (4 → 14)
+
+This round grew the **main All invoices page** from 4 to 14 rows — *without* touching the four live invoices or
+the judges' set. Unlike Round C (whose 10 were left as `propose`-verified fixtures in the judges' zip), these ten
+were **actually paid on-chain** through the full pipeline: two TEE readers read each invoice, the agent
+(`orvantra-agent.testnet`, propose-only key) called `propose_payment` on the v6 treasury, and the treasury paid
+tUSDC to the vendor.
+
+New testnet vendor accounts (faucet-sponsor), registered in `orvantra-registry.testnet` (tUSDC on NEAR → own
+account, ~0.004 NEAR storage deposit each) and approved in the v6 treasury policy (max_per_invoice 300,
+monthly_cap 600) by `orvantra.testnet` — deliberately **separate** from Round C's NovaTech/GreenLeaf/PixelWorks so
+the judges' "first payment to this vendor" holds stay intact:
+
+| Vendor | Account | Registry |
+|--------|---------|----------|
+| Harbor & Oak Co | `orvantra-harboroak.testnet` | version 1, tUSDC → own account |
+| Cloudline Systems | `orvantra-cloudline.testnet` | version 1, tUSDC → own account |
+| Meridian Freight | `orvantra-meridian.testnet` | version 1, tUSDC → own account |
+
+`agent/fixtures-main/` holds the **10 invoices** (HO-2026-118…120, CL-2026-210…213, MF-2026-301…303; amounts
+55.00–100.00 USDC, total 765.00 — sized to fit the treasury's 30-day cap headroom of 822.50). Each pays
+`tUSDC` (the treasury's own token) on NEAR, so `selectPath` returns **direct** and no 1Click quote is needed —
+the same path as the earlier Bob payments.
+
+On-chain result (all read back live, 2026-11-12): the three **first** payments to these vendors held as
+`Pending` (`first payment to this vendor`) and were approved by the owner — payments **#4 HO-2026-118 100.00**,
+**#5 CL-2026-210 80.00**, **#6 MF-2026-301 95.00** (`approved_by_owner=true`); the remaining **seven** auto-paid
+the moment they were proposed (each ≤ the 100.00 auto-pay threshold and the vendor already had a paid history) —
+payments **#7–#13** (`approved_by_owner=false`, no hold reasons). Treasury `payment_count` went 4 → **14**;
+`monthly_spent` 177.50 → **942.50** USDC. The All invoices page (`/invoices`) shows **14 rows**: the four
+originals (B-0007, B-0008, INV-2026-0142, INV-2026-0150) untouched, plus the ten new ones. No web redeploy was
+required — the page reads the treasury straight from the chain.
+
+No source changes were needed for this round beyond committing the new `agent/fixtures-main/` fixtures (the
+pipeline, registry, treasury and page already handled the direct-tUSDC path end to end). The judges' zip still
+ships exactly the ten Round C files + `EXPECTED.md`.
