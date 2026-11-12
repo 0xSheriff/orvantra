@@ -285,3 +285,20 @@ required — the page reads the treasury straight from the chain.
 No source changes were needed for this round beyond committing the new `agent/fixtures-main/` fixtures (the
 pipeline, registry, treasury and page already handled the direct-tUSDC path end to end). The judges' zip still
 ships exactly the ten Round C files + `EXPECTED.md`.
+
+## 2026-11-12 — v6.8: the kept original shows for every payment (11 rows that said "not kept")
+
+Eleven of the fourteen All-invoices rows showed "The original file was not kept" on their review page even
+though the original IS kept. Two causes: (1) the ten Round-D payments were proposed by the CLI pipeline, so no
+web upload record linked their on-chain invoice hash to the files in `agent/fixtures-main/` — and the web only
+served `agent/fixtures/` and `agent/data/files/`; (2) B-0007's kept file `agent/fixtures/02-bob-normal.pdf` is a
+PDF, which the web cannot render.
+
+Fix: `web/lib/server/originals.ts` — a git-tracked map of on-chain `invoice_hash` → kept file (all 14 payments
+of `orvantra-treasury-v6.testnet`, hashes read back live) used as a fallback for payments with no local record;
+the web now resolves fixture files from both `agent/fixtures/` and `agent/fixtures-main/`
+(`ServerConfig.mainFixturesDir`, `fixturePath`); B-0007 is served as `02-bob-normal-page1.png`, a render of the
+kept PDF (the PDF itself is unchanged and still the source of record). The existing path still wins: uploaded
+originals keep their page image and field overlays. After this deploy, all 14 rows show the original on their
+review page. Requires a redeploy (image code + the new rendered PNG ship in the image; `agent/data/` is a
+persistent volume, so the git ledger was not edited).

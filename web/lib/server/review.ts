@@ -9,7 +9,8 @@ import { layoutOverlays, type Overlays } from '../overlay';
 import { verdictFor, type Row } from '../rows';
 import type { Verdict } from '../verdict';
 import type { AppData } from './data';
-import { fixtureExists } from './data';
+import { fixtureExists, fixturePath } from './data';
+import { keptOriginal } from './originals';
 
 export interface ReviewImage {
   src: string;
@@ -67,6 +68,21 @@ function imageFor(row: Row, d: AppData): ReviewImage | null {
       alt: `${alt}, page 1${r.pages > 1 ? ` of ${r.pages}` : ''}, as uploaded`,
       pages: r.pages,
     };
+  }
+  if (row.payment && row.invoiceHash) {
+    const file = keptOriginal(row.invoiceHash);
+    if (file) {
+      const path = fixturePath(d.cfg, file);
+      if (path) {
+        let size: { width: number; height: number } | null = null;
+        try {
+          size = imageSize(readFileSync(path));
+        } catch {
+          size = null;
+        }
+        return { src: `/api/files/fixture-${file}`, width: size?.width ?? 892, height: size?.height ?? 1263, alt: `${alt}, as read by the agent`, pages: 1 };
+      }
+    }
   }
   if (row.fixtureFile && fixtureExists(d.cfg, row.fixtureFile)) {
     let size: { width: number; height: number } | null = null;

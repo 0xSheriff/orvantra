@@ -1,7 +1,8 @@
 // Server-side data for every page: live NEAR views (read-only) + the agent ledger + upload records.
 // Nothing here signs or writes on-chain.
 import 'server-only';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { readLedger, type LedgerEntry } from 'orvantra-agent/ledger';
 import * as nearViews from 'orvantra-agent/near';
 import type { Payment, TreasuryConfig, VendorPolicy, VendorView } from 'orvantra-agent/near';
@@ -111,10 +112,18 @@ export async function loadData(): Promise<AppData> {
   };
 }
 
+/** Where a kept fixture file lives (agent/fixtures or agent/fixtures-main), or null. */
+export function fixturePath(cfg: ServerConfig, name: string | null): string | null {
+  if (!name || !/^[\w.-]+\.(png|jpe?g)$/i.test(name)) return null;
+  for (const dir of [cfg.fixturesDir, cfg.mainFixturesDir]) {
+    if (existsSync(join(dir, name))) return join(dir, name);
+  }
+  return null;
+}
+
 /** Fixture files the CLI ran (for showing the original of a payment proposed outside the web app). */
 export function fixtureExists(cfg: ServerConfig, name: string | null): boolean {
-  if (!name || !/^[\w.-]+\.(png|jpe?g)$/i.test(name)) return false;
-  return existsSync(cfg.fixturesDir) && readdirSync(cfg.fixturesDir).includes(name);
+  return fixturePath(cfg, name) !== null;
 }
 
 /** Does the treasury still hold this invoice hash (so the same invoice cannot be proposed again)? Fresh read. */
