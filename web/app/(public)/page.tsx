@@ -44,7 +44,7 @@ export default async function Home() {
             limits.
           </p>
           <nav className="doors" aria-label="Start here">
-            <Link href="/review">
+            <Link href="/invoices">
               <b>Run your treasury</b>
               <span>Review invoices and approve what&apos;s held</span>
               <i className="ar" aria-hidden="true">→</i>
