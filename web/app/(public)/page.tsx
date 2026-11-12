@@ -4,6 +4,7 @@ import { liveParts } from '@/lib/live';
 import { publicConfig, publicLinks } from '@/lib/server/config';
 import { getLiveCounts } from '@/lib/server/live';
 import { Mark } from '@/components/Mark';
+import { Social } from '@/components/Social';
 
 const TITLE = "Orvantra — accounts payable, engineered for trust";
 const DESCRIPTION =
@@ -62,7 +63,7 @@ export default async function Home() {
             </Link>
           </nav>
         </main>
-        <footer className="foot">Built on NEAR · NEAR Hackathon 2026</footer>
+        <footer className="foot">Built on NEAR · NEAR Hackathon 2026<Social repoUrl={links.repoUrl} /></footer>
       </section>
 
       <section className="half dark" aria-label="How it works">
@@ -71,6 +72,7 @@ export default async function Home() {
           <Link href="/judges">For judges</Link>
           <Link href="/proof">Proof</Link>
           {links.repoUrl ? <a href={links.repoUrl}>GitHub</a> : null}
+          <Link className="opentop" href="/invoices">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">How it works</h2>
@@ -91,7 +93,7 @@ export default async function Home() {
             <a href={links.treasuryExplorer}>Explorer <span className="ar">→</span></a>
           </p>
         </div>
-        <footer className="foot">NEAR Intents · NEAR AI Cloud · Open source</footer>
+        <footer className="foot">NEAR Intents · NEAR AI Cloud · Open source<Social repoUrl={links.repoUrl} /></footer>
       </section>
     </div>
   );

@@ -4,8 +4,10 @@ import Link from 'next/link';
 import { VendorPanel } from '@/components/VendorPanel';
 import { WalletProvider } from '@/components/WalletProvider';
 import { Mark } from '@/components/Mark';
+import { Social } from '@/components/Social';
 import { feeSentence } from '@/lib/registry';
 import { vendorPageData } from '@/lib/server/vendor';
+import { publicLinks } from '@/lib/server/config';
 
 const TITLE = 'Get paid your way — register your payout details with Orvantra';
 const DESCRIPTION =
@@ -21,6 +23,7 @@ export const metadata: Metadata = {
 /** Vendor sign-up, from the approved mockup design/final-vendor.html. Public: no app sidebar. */
 export default async function Register() {
   const data = await vendorPageData();
+  const links = publicLinks();
   const typical = data.typicalDeposit == null ? null : BigInt(data.typicalDeposit);
   const feeLine = `${feeSentence(true, typical)} Other wallets pay a tiny network fee (under 0.01 NEAR) plus the refundable deposit.`;
   return (
@@ -42,7 +45,7 @@ export default async function Register() {
             <div><dt>Put your name on invoices</dt><dd>Write <code className="m">acme.near</code> instead of a long address.</dd></div>
           </dl>
         </main>
-        <footer className="foot">Your entry lives in the vendor registry contract on NEAR.</footer>
+        <footer className="foot">Your entry lives in the vendor registry contract on NEAR.<Social repoUrl={links.repoUrl} /></footer>
       </section>
 
       <section className="half dark" aria-label="Your payout details">
@@ -53,7 +56,7 @@ export default async function Register() {
         >
           <VendorPanel {...data} />
         </WalletProvider>
-        <footer className="foot">Supported: NEAR, Base, Ethereum, Arbitrum, Solana, Tron and more via NEAR Intents</footer>
+        <footer className="foot">Supported: NEAR, Base, Ethereum, Arbitrum, Solana, Tron and more via NEAR Intents<Social repoUrl={links.repoUrl} /></footer>
       </section>
     </div>
   );
