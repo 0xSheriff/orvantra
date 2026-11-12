@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { publicConfig, publicLinks } from '@/lib/server/config';
 import { Mark } from '@/components/Mark';
+import { Social } from '@/components/Social';
 
 const TITLE = 'For judges — try Orvantra in five steps';
 const DESCRIPTION =
@@ -52,11 +53,12 @@ export default function Judges() {
             </a>
           </nav>
         </main>
-        <footer className="foot">Network: {network} · Treasury: {treasuryId}</footer>
+        <footer className="foot">Network: {network} · Treasury: {treasuryId}<Social repoUrl={links.repoUrl} /></footer>
       </section>
 
       <section className="half dark" aria-label="Do this, see that">
         <nav className="top menu" aria-label="Site">
+          <Link className="opentop" href="/invoices">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">Do this <span className="ar">→</span> see that</h2>
@@ -69,7 +71,7 @@ export default function Judges() {
           </ol>
           <p className="pf-note">Every claim, with tx links and the full 15-fixture verdict table: <Link href="/proof">proof of everything →</Link></p>
         </div>
-        <footer className="foot">Questions: see the README&apos;s &ldquo;Do this → see this&rdquo; section</footer>
+        <footer className="foot">Questions: see the README&apos;s &ldquo;Do this → see this&rdquo; section<Social repoUrl={links.repoUrl} /></footer>
       </section>
     </div>
   );

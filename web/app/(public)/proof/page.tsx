@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { publicConfig, publicLinks } from '@/lib/server/config';
 import { Mark } from '@/components/Mark';
+import { Social } from '@/components/Social';
 import { EvalTable } from '@/components/ProofEval';
 
 const TITLE = 'Proof of everything — verify Orvantra on-chain';
@@ -74,7 +75,7 @@ export default function Proof() {
   const { network, treasuryId, registryId } = publicConfig();
   const links = publicLinks();
   return (
-    <div className="split">
+    <div className="split tall">
       <section className="half light">
         <header className="top">
           <Link className="logo" href="/"><Mark size={24} />Orvantra</Link>
@@ -102,12 +103,13 @@ export default function Proof() {
             </Link>
           </nav>
         </main>
-        <footer className="foot">Network: {network} · Treasury: {treasuryId} · Registry: {registryId}</footer>
+        <footer className="foot">Network: {network} · Treasury: {treasuryId} · Registry: {registryId}<Social repoUrl={links.repoUrl} /></footer>
       </section>
 
       <section className="half dark" aria-label="Evidence">
         <nav className="top menu" aria-label="Site">
           <Link href="/judges">Try it in steps</Link>
+          <Link className="opentop" href="/invoices">Open app</Link>
         </nav>
         <div className="mid">
           <h2 className="lbl">1 · The eval — 15 invoices, two TEE readers, live chain views</h2>
@@ -169,9 +171,7 @@ export default function Proof() {
             </li>
           </ol>
         </div>
-        <footer className="foot">
-          Reproduce: <code className="m">cd agent &amp;&amp; npm ci &amp;&amp; npm run eval</code> — 15/15, real TEE readers.
-        </footer>
+        <footer className="foot">Reproduce: <code className="m">cd agent &amp;&amp; npm ci &amp;&amp; npm run eval</code> — 15/15, real TEE readers.<Social repoUrl={links.repoUrl} /></footer>
       </section>
     </div>
   );
