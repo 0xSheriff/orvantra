@@ -3,7 +3,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { serverConfig } from '@/lib/server/config';
-import { fixtureExists } from '@/lib/server/data';
+import { fixturePath } from '@/lib/server/data';
 
 export const runtime = 'nodejs';
 
@@ -17,7 +17,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ name: s
   if (PAGE.test(name)) path = join(cfg.filesDir, name);
   else {
     const m = name.match(FIXTURE);
-    if (m && fixtureExists(cfg, m[1])) path = join(cfg.fixturesDir, m[1]);
+    if (m) path = fixturePath(cfg, m[1]);
   }
   if (!path) return new Response('not found', { status: 404 });
   try {

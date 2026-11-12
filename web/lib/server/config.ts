@@ -26,6 +26,7 @@ export interface ServerConfig {
   ledgerPath: string;
   filesDir: string;
   fixturesDir: string;
+  mainFixturesDir: string;
   /** Fresh judge invoices: never processed on any treasury, separate from the live All-invoices runs. */
   judgesFixturesDir: string;
 }
@@ -41,6 +42,7 @@ export function serverConfig(): ServerConfig {
     ledgerPath,
     filesDir: e.ORVANTRA_FILES_DIR ?? resolve(AGENT_DIR, 'data/files'),
     fixturesDir: resolve(AGENT_DIR, 'fixtures'),
+    mainFixturesDir: e.ORVANTRA_MAIN_FIXTURES_DIR ?? resolve(AGENT_DIR, 'fixtures-main'),
     judgesFixturesDir: e.ORVANTRA_JUDGES_FIXTURES_DIR ?? resolve(AGENT_DIR, 'fixtures-judges'),
   };
 }
