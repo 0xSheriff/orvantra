@@ -226,6 +226,7 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 .split .dark { background: var(--ink); color: var(--d-text); }
 .split .dark :focus-visible { outline-color: var(--d-text); }
 .split .top { display: flex; align-items: center; height: 36px; }
+.split .top .opentop { margin-left: auto; font-size: 14px; font-weight: 600; }
 .split .logo { font-family: var(--serif); font-size: 24px; letter-spacing: -.01em; text-decoration: none; display: inline-flex; align-items: center; gap: 10px; }
 .split .mid { margin: auto 0; padding: 48px 0; }
 .split .foot { font-size: 12.5px; color: var(--muted); }
@@ -251,8 +252,6 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 .split .menu { justify-content: flex-end; gap: 26px; font-size: 14px; }
 .split .menu a { color: var(--d-2); text-decoration: none; }
 .split .menu a:hover { color: var(--d-text); }
-.split .menu a.open { color: var(--d-text); border: 1px solid var(--d-line); padding: 7px 14px; }
-.split .menu a.open:hover { border-color: var(--d-text); }
 .split .dark .mid { max-width: 500px; }
 .split .lbl { font-size: 12.5px; font-weight: 400; color: var(--d-2); margin-bottom: 14px; }
 .split .steps { list-style: none; counter-reset: s; border-top: 1px solid var(--d-rule); }
@@ -304,7 +303,6 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
   .split .doors { margin-top: 24px; max-width: none; }
   .split .doors a { padding: 14px 0; }
   .split .menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); row-gap: 10px; column-gap: 16px; justify-content: normal; height: auto; min-height: 0; }
-  .split .menu a.open { grid-column: 1 / -1; text-align: center; padding: 8px 14px; }
   .split .lede { font-size: 16px; }
   .split .dark .mid, .split .dark .mid:has(.checks), .split .dark .mid:has(.pf-lede) { max-width: none; }
   .split .steps li { grid-template-columns: 28px 1fr; font-size: 14.5px; padding: 13px 0; }
