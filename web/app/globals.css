@@ -197,8 +197,18 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 }
 @media (max-width: 760px) {
   .app { grid-template-columns: 1fr; }
-  .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule); padding: 20px; gap: 16px; }
-  .sidefoot { margin-top: 0; }
+  .side { position: static; height: auto; border-right: 0; border-bottom: 1px solid var(--rule-2); background: #f0ebe0; /* deeper than page paper so the menu block reads as distinct */ padding: 16px; gap: 12px; }
+  .side .brand { font-size: 19px; }
+  .side .navlist { display: flex; align-items: center; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--rule); margin-top: -4px; padding-top: 6px; }
+  .side .navlist a { flex: none; min-height: 0; padding: 7px 12px 9px 0; margin-right: 14px; border-bottom: 2px solid transparent; white-space: nowrap; }
+  .side .navlist a span { margin-left: 5px; }
+  .side .navlist a.on { border-bottom-color: var(--ink); }
+  .side .sidefoot { margin-top: 0; gap: 10px; }
+  .side .wallet { font-size: 11px; }
+  .side .wallet .who { font-size: 10px; word-break: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .side .treasury { border-top: 1px solid var(--rule); padding-top: 10px; font-size: 11px; }
+  .side .treasury b { font-size: 18px; margin: 2px 0 1px; }
+  .side .treasury .acct { font-size: 10px; }
   main { padding: 18px 16px 32px; }
   .list th:nth-child(4), .list td:nth-child(4) { display: none; }
   .paper .pin { display: none; }
@@ -288,12 +298,19 @@ dialog.run::backdrop { background: rgba(27,26,23,.28); }
 }
 
 @media (max-width: 899px) {
-  .split { grid-template-columns: 1fr; }
-  .split .half { padding: 22px 24px 28px; }
-  .split .mid { padding: 56px 0; }
-  .split .doors, .split .dark .mid, .split .dark .mid:has(.checks) { max-width: none; }
-  .split .menu { flex-wrap: wrap; justify-content: flex-start; gap: 6px 22px; height: auto; min-height: 36px; }
+  .split { grid-template-columns: 1fr; align-content: start; min-height: 0; }
+  .split .half { padding: 24px 20px 26px; }
+  .split .mid { padding: 26px 0; }
+  .split .doors { margin-top: 24px; max-width: none; }
+  .split .doors a { padding: 14px 0; }
+  .split .menu { display: grid; grid-template-columns: repeat(auto-fit, minmax(105px, 1fr)); row-gap: 10px; column-gap: 16px; justify-content: normal; height: auto; min-height: 0; }
+  .split .menu a.open { grid-column: 1 / -1; text-align: center; padding: 8px 14px; }
   .split .lede { font-size: 16px; }
+  .split .dark .mid, .split .dark .mid:has(.checks), .split .dark .mid:has(.pf-lede) { max-width: none; }
+  .split .steps li { grid-template-columns: 28px 1fr; font-size: 14.5px; padding: 13px 0; }
+  .split .steps small { font-size: 12.5px; }
+  .split .live { margin-top: 24px; }
+  .split .live a { flex-basis: 100%; text-align: right; }
 }
 /* ---------------------------------------------------------------- vendor sign-up (/register)
    From the approved mockup design/final-vendor.html. Scoped to .split.vendor. */
