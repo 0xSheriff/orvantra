@@ -31,7 +31,8 @@ export default function Judges() {
           <h1 className="display judges">Try it in five steps.</h1>
           <p className="lede">
             Everything runs on NEAR {network} against <M>{treasuryId}</M>. Each step says what to do and what you
-            should see. The test invoices&rsquo; hashes are unique, so the same files behave the same on every try.
+            should see. The zip holds ten fresh invoices from three vendors you won&rsquo;t find on the All invoices
+            page — the first upload of each gives the full path, and re-uploading demos the duplicate guard.
           </p>
           <nav className="doors links" aria-label="Resources">
             <a href="/judges/test-invoices.zip" download>
@@ -61,9 +62,9 @@ export default function Judges() {
           <h2 className="lbl">Do this <span className="ar">→</span> see that</h2>
           <ol className="steps checks">
             <li><span>Open the app and connect a {network} wallet<small><Ar />owner view is <M>orvantra.testnet</M>; anyone can upload and watch the stream</small></span></li>
-            <li><span>Upload <M>rb-acme-normal.png</M><small><Ar />proposed: two TEE readers agree, 1Click quote verified, payment Pending with the cross-chain reason</small></span></li>
-            <li><span>Upload <M>14-acme-implicit-redirect.png</M><small><Ar />held: &quot;invoice asks to pay a different address — registry is the source of truth&quot;</small></span></li>
-            <li><span>Upload <M>01-acme-normal.png</M><small><Ar />rejected before signing: its invoice hash is already on-chain (duplicate guard)</small></span></li>
+            <li><span>Upload <M>01-novatech-retainer.png</M><small><Ar />proposed: two TEE readers agree, the contract holds it (first payment to NovaTech) — the owner approves it in their own wallet and the money settles to the vendor&rsquo;s own NEAR account</small></span></li>
+            <li><span>Upload <M>05-greenleaf-irrigation.png</M><small><Ar />proposed and held with two reasons: over the 100 auto-pay threshold, and first payment to GreenLeaf</small></span></li>
+            <li><span>Upload <M>01-novatech-retainer.png</M> again<small><Ar />rejected before signing: its invoice hash is already on-chain (duplicate guard)</small></span></li>
             <li><span>Run <M>npm run prove-key-limits</M> in <M>agent/</M><small><Ar />4 / 4 refused by the network: the agent key can only propose</small></span></li>
           </ol>
           <p className="pf-note">Every claim, with tx links and the full 15-fixture verdict table: <Link href="/proof">proof of everything →</Link></p>

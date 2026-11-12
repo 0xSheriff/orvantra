@@ -220,3 +220,31 @@ treasury accepted it: `orvantra.testnet` ("Orvantra testings") now has a 200.00 
 `get_vendor_policy`. First live use of the editor: browser → wallet → contract, no server ever holds the signature.
 (Exact tx hash not captured here — search `set_vendor_policy` on `orvantra-treasury-v6.testnet` in
 https://testnet.nearblocks.io; the on-chain policy above is the durable proof.)
+
+## 2026-11-12 — Round C (v6.4): 3 new vendors + 10 fresh judge invoices, fresh judges zip
+
+New testnet vendor accounts created (faucet-sponsor), registered in `orvantra-registry.testnet` (each with its own
+payout: tUSDC on NEAR to its own account; `set_vendor` needs the ~0.004 NEAR storage deposit), and approved in the
+v6 treasury policy (max_per_invoice 300, monthly_cap 600) by `orvantra.testnet`:
+
+| Vendor | Account | Registry |
+|--------|---------|----------|
+| NovaTech Labs | `orvantra-novatech.testnet` | version 1, tUSDC → own account |
+| GreenLeaf Co | `orvantra-greenleaf.testnet` | version 1, tUSDC → own account |
+| PixelWorks Studio | `orvantra-pixelworks.testnet` | version 1, tUSDC → own account |
+
+`agent/fixtures-judges/` now holds **10 brand-new invoices** (NT-2026-031…034, GL-2026-051…053, PW-2026-071…073;
+amounts 35.00–250.00 USDC) plus an `EXPECTED.md`. Verified live against v6 (2026-11-12, both TEE readers): all ten
+analyze to **propose** with clean checks; the contract holds each one (`first payment to this vendor`, plus
+`above auto-pay threshold 100.00` for the four over $100). Freshness check against the treasury's full
+`get_payments` history (4 payments: B-0007, B-0008, INV-2026-0142, INV-2026-0150): **zero** invoice-hash or
+vendor+number collisions — nothing in the set has ever been proposed.
+
+The judges' zip (`/judges/test-invoices.zip`, route now reads `agent/fixtures-judges/`) ships exactly these 10
+files + `EXPECTED.md`, and nothing else — separate from the four live invoices on the All invoices page. The
+`/judges` page steps and the README's judges intro were updated to the new set. Existing fixtures, vendors and the
+15-case eval are untouched.
+
+One transient note: on the local Mac one run of `08-pixelworks-brand.png` held on "end-to-end encryption failed"
+(hotspot can't reach the attestation endpoints); the immediate re-run proposed cleanly — same E2EE caveat as the
+v6.1 entry, Railway runs unaffected.
