@@ -23,11 +23,11 @@ The live app talks to treasury **`orvantra-treasury-v6.testnet`** (owner `orvant
 **See:** same stream, then the treasury **pays immediately on-chain** — `ft_transfer` of tUSDC directly to `orvantra-bob.testnet`, payment marked **Paid** with the tx in the activity feed. No owner approval needed — that is the point of the threshold.
 
 ### 3. Fraud — "our payout address changed"
-**Do:** upload `14-acme-implicit-redirect.png` (Acme's invoice, but it asks you to pay a 64-hex implicit account instead).
+**Do:** upload `14-cloudline-implicit-redirect.png` (Cloudline's invoice, but it asks you to pay a 64-hex implicit account instead).
 **See:** the payment is **proposed with a hold** — on-chain reason `agent: invoice asks to pay a different address — ignored; registry is the source of truth`. The treasury can only ever pay the registry address; the planted address is discarded. (Verified live against v6 on 2026-11-11.)
 
 ### 4. Duplicate — the same invoice twice
-**Do:** upload `01-acme-normal.png` (already proposed on the live treasury by an earlier demo run).
+**Do:** upload `agent/fixtures-main/legacy-01-acme-normal.png` (already proposed on the live treasury by an earlier demo run).
 **See:** rejected **before any transaction is signed**: `invoice_hash already used in the treasury (duplicate invoice)`. Steps 3–5 of the pipeline show skipped; nothing is sent. (The live UI shows exactly this: step 2 "Checking registry and limits → reject", steps 3–4 skipped, "Stopped. Nothing was sent.")
 
 ### 5. The proof page — every claim, with links
@@ -52,7 +52,7 @@ The live app talks to treasury **`orvantra-treasury-v6.testnet`** (owner `orvant
 
 ### 10. Reproduce the eval — 15 fixtures, real TEE readers
 **Do:** `cd agent && npm i && npm run eval` (needs `NEARAI_API_KEY` in the repo `.env`).
-**See:** `15/15 PASS` — every fixture through both attested readers + live chain views against the eval's target treasury `orvantra-treasury-v4.testnet` (the agent's default; a stable archive of demo state, separate from the live v6 app). Expected vs actual per fixture is printed, with the verdict reason that must match.
+**See:** `15/15 PASS` — every fixture through both attested readers + live chain views against the live treasury `orvantra-treasury-v6.testnet` (the agent's default; the fixtures are designed against its vendors Harbor & Oak, Cloudline Systems and Meridian Freight). Expected vs actual per fixture is printed, with the verdict reason that must match.
 
 ### 11. Vendors control their own payout
 **Do:** register at https://orvantra.up.railway.app/register with any testnet wallet, or inspect the [registry account page](https://testnet.nearblocks.io/accounts/orvantra-registry.testnet).
@@ -125,7 +125,7 @@ All decisions are enforced **in the contracts**, not the agent. The agent can on
 
 ## Honest limits (read these)
 
-- **Testnet is primary.** The live app runs on `orvantra-treasury-v6.testnet` with test funds and a real restricted agent key; the reproducible eval (case 10) targets `orvantra-treasury-v4.testnet`, a stable archive of earlier demo state. NEAR Intents has no testnet, so cross-chain payouts on testnet are **simulated at the last hop**: a real 1Click quote proves price and signature, but the tUSDC goes to a stand-in account. Same-chain payouts are fully real on-chain. Testnet-only projects are eligible (Q-010).
+- **Testnet is primary.** The live app runs on `orvantra-treasury-v6.testnet` with test funds and a real restricted agent key; the reproducible eval (case 10) reads the same treasury (views only, nothing is signed). NEAR Intents has no testnet, so cross-chain payouts on testnet are **simulated at the last hop**: a real 1Click quote proves price and signature, but the tUSDC goes to a stand-in account. Same-chain payouts are fully real on-chain. Testnet-only projects are eligible (Q-010).
 - **Two real mainnet 1Click swaps exist as a bonus (owner-wallet, not product payments):** NEAR → Base (0.45 NEAR → 1.607589 USDC) and the reverse Base → NEAR, each a real 1Click quote with verified signature and a plain deposit to the quote address. No Orvantra contracts are deployed on mainnet. Details in `docs/DEPLOYMENTS.md`.
 - **1Click deposit address verification is off-chain in v1.** The quote signature and recipient are verified off-chain; the contract caps a compromised agent's damage to the auto-pay limit (0 for cross-chain, so zero).
 - **No fiat off-ramp.** Vendors receive stablecoins.

@@ -88,7 +88,7 @@ row merging, formatting). `npm run lint` runs ESLint.
 | Env (server) | Default | |
 |---|---|---|
 | `NEAR_NETWORK` | `testnet` | |
-| `TREASURY_ID` | `orvantra-treasury-v4.testnet` | |
+| `TREASURY_ID` | `orvantra-treasury-v6.testnet` | |
 | `ORVANTRA_MAX_PROPOSALS_PER_DAY` | `20` | on-chain proposals the demo accepts per UTC day (execute mode) |
 | `REGISTRY_ID` | `orvantra-registry.testnet` | |
 | `TOKEN_ID` | the treasury's `token` | |
@@ -108,13 +108,13 @@ row merging, formatting). `npm run lint` runs ESLint.
 | Click **Connect wallet** | The wallet selector with MyNearWallet, Meteor and HERE. |
 | Sign in with an account that is not `orvantra-owner.testnet` | Approve and Reject disabled: "Only the treasury owner, orvantra-owner.testnet, can approve or reject this payment." |
 | Sign in as the owner, click **Approve** | Your wallet asks to sign `approve_payment` (1 yoctoNEAR); then "Signed. The treasury is checking Acme Design Studio's registry entry and paying…", then **Paid.** and the paid record. |
-| **Upload invoice** → `agent/fixtures/03-bob-small.png` | Bob's B-0008 was already paid (#1), so the steps stop after the checks: **Stopped — duplicate invoice**, no transaction. A new Bob invoice under 100 would tick through all five steps, be paid automatically, and open the list with its row selected. |
+| **Upload invoice** → `agent/fixtures-main/legacy-03-bob-small.png` | Bob's B-0008 was already paid (#1), so the steps stop after the checks: **Stopped — duplicate invoice**, no transaction. A new Bob invoice under 100 would tick through all five steps, be paid automatically, and open the list with its row selected. |
 | **Upload invoice** → `agent/fixtures/07-unknown-vendor.png` | Stops after the checks ("not a registered vendor"), no transaction; the row reads **Stopped — not a registered vendor**. |
 | `/invoices?f=paid` | Only paid rows ("Paid automatically", "Paid — approved by you"). |
 | Open `/register`, connect as `orvantra-bob.testnet` | "You're registered — version 2, …", prefilled NEAR / tUSDC / `orvantra-bob.testnet`, button "Nothing to change". Switch to Base and type `0xBAD`: "A Base address is 0x followed by 40 hex characters." |
 | `npm run relay-selftest -- http://localhost:3000` | `relay: HTTP 200 ok=true tx=…`, bob's entry unchanged, "bob paid gas: no". |
 | `/rules` | "Pay automatically up to 100.00 tUSDC." and the other limits, read from the treasury. |
-| `npm run attach -- ../agent/fixtures/04-acme-changed-bank.png` | Read-only: stores the image, readings and region boxes for an invoice proposed earlier from the command line, so its review screen shows overlays. Nothing is proposed. |
+| `npm run attach -- ../agent/fixtures-main/legacy-04-acme-changed-bank.png` | Read-only: stores the image, readings and region boxes for an invoice proposed earlier from the command line, so its review screen shows overlays. Nothing is proposed. |
 
 ## Files
 - `app/(public)/` home and judges pages (+ the zip route); `app/(app)/` the owner app with its sidebar layout.

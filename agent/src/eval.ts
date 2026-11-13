@@ -20,20 +20,20 @@ interface Expectation {
 
 // Keep in sync with fixtures/EXPECTED.md.
 export const EXPECTED: Record<string, Expectation> = {
-  '01-acme-normal.png': { action: 'propose' },
-  '02-bob-normal.pdf': { action: 'hold', reason: "more than 3x this vendor's median" },
-  '03-bob-small.png': { action: 'propose' },
-  '04-acme-changed-bank.png': { action: 'hold', reason: 'invoice asks to pay a different address' },
-  '05-acme-duplicate.png': { action: 'reject', reason: 'duplicate of 01-acme-normal.png', sameHashAs: '01-acme-normal.png' },
-  '06-acme-inflated.png': { action: 'hold', reason: 'line items sum to 30.00 USDC but the total is 300.00 USDC' },
+  '01-harboroak-normal.png': { action: 'propose' },
+  '02-meridian-unusual.pdf': { action: 'hold', reason: "more than 3x this vendor's median" },
+  '03-cloudline-small.png': { action: 'propose' },
+  '04-harboroak-changed-payout.png': { action: 'hold', reason: 'invoice asks to pay a different address' },
+  '05-harboroak-duplicate.png': { action: 'reject', reason: 'duplicate of 01-harboroak-normal.png', sameHashAs: '01-harboroak-normal.png' },
+  '06-cloudline-inflated.png': { action: 'hold', reason: 'line items sum to 30.00 USDC but the total is 200.00 USDC' },
   '07-unknown-vendor.png': { action: 'reject', reason: 'not in the vendor registry' },
-  '08-acme-credit-note.png': { action: 'reject', reason: 'a credit note' },
-  '09-acme-over-max.png': { action: 'reject', reason: 'max_per_invoice' },
+  '08-meridian-credit-note.png': { action: 'reject', reason: 'a credit note' },
+  '09-harboroak-over-max.png': { action: 'reject', reason: 'max_per_invoice' },
   '10-unapproved-vendor.png': { action: 'reject', reason: 'not approved in the treasury policy' },
-  '11-acme-name-mismatch.png': { action: 'hold', reason: 'registered as' },
-  '12-bob-possible-duplicate.png': { action: 'hold', reason: 'possible duplicate of B-0008' },
-  '13-acme-bank-details.png': { action: 'hold', reason: 'bank/payment details' },
-  '14-acme-implicit-redirect.png': { action: 'hold', reason: 'invoice asks to pay a different address' },
+  '11-cloudline-name-mismatch.png': { action: 'hold', reason: 'registered as' },
+  '12-harboroak-possible-duplicate.png': { action: 'hold', reason: 'possible duplicate of HO-2026-119' },
+  '13-meridian-bank-details.png': { action: 'hold', reason: 'bank/payment details' },
+  '14-cloudline-implicit-redirect.png': { action: 'hold', reason: 'invoice asks to pay a different address' },
   '15-near-less-invoice.png': { action: 'reject', reason: 'no vendor NEAR account' },
 };
 // Once a fixture has been proposed on the target treasury (the demo runs do that), its hash is burnt there and the

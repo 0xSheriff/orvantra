@@ -107,7 +107,7 @@ export const DEFAULT_RPC_URLS: Record<string, string[]> = {
 };
 
 /** The treasury every tool points at unless TREASURY_ID says otherwise. */
-export const DEFAULT_TREASURY_ID = 'orvantra-treasury-v4.testnet';
+export const DEFAULT_TREASURY_ID = 'orvantra-treasury-v6.testnet';
 
 export function nearConfig(env: NodeJS.ProcessEnv = process.env): NearConfig {
   const network = env.NEAR_NETWORK ?? 'testnet';

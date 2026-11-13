@@ -358,7 +358,7 @@ describe('Telegram --link only answers the configured chat', () => {
 });
 
 describe('PDF limits (A: max 2 pages, no page above 5000x5000 at render scale)', () => {
-  const pdf = readFileSync(fileURLToPath(new URL('../fixtures/02-bob-normal.pdf', import.meta.url)));
+  const pdf = readFileSync(fileURLToPath(new URL('../fixtures-main/legacy-02-bob-normal.pdf', import.meta.url)));
   it('accepts the fixture invoice', async () => {
     await expect(checkPdfLimits(pdf)).resolves.toBeUndefined();
   });
