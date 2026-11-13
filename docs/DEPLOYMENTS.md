@@ -302,3 +302,40 @@ kept PDF (the PDF itself is unchanged and still the source of record). The exist
 originals keep their page image and field overlays. After this deploy, all 14 rows show the original on their
 review page. Requires a redeploy (image code + the new rendered PNG ship in the image; `agent/data/` is a
 persistent volume, so the git ledger was not edited).
+
+## 2026-11-13 — v6.11: proof eval suite rebuilt under the current vendor names (15 fixtures, zero acme/bob)
+
+The 15-file eval pack in `agent/fixtures/` was still the Acme / Bob suite designed against treasury v4, while the
+live app and the proof page talk about Harbor & Oak, Cloudline Systems and Meridian Freight on
+`orvantra-treasury-v6.testnet`. Rebuilt against the live v6 state read back on 2026-11-13 (auto-pay 100, monthly cap
+1000, 14 payments; medians Harbor & Oak 85, Cloudline 67.50, Meridian 80; every vendor policy 300 / 600). Same
+coverage shape as before: two clean proposes, batch duplicate (#5 shares #1's hash, caught in-process, nothing
+written on-chain), 3x-median hold (Meridian 260.00), payout-redirect holds (0x… notice and a 64-hex implicit
+account), line-items-vs-total hold, name-mismatch hold, possible-duplicate hold (#12 reuses the **paid**
+HO-2026-119 at 75.50, another hash), bank-details hold, and rejects for unknown vendor, credit note, over
+max_per_invoice, registered-but-not-approved vendor and an invoice with no NEAR account. All 14 distinct hashes were
+checked `is_invoice_used = false` on v6 before the suite was finalised.
+
+On-chain change (testnet, one transaction): every registry vendor on v6 already had a policy, so there was no
+"registered but not approved" account left. Created **`orvantra-tidewater.testnet`** via the testnet faucet and
+registered it as **Tidewater Print Co** (tUSDC on NEAR, to itself) with the new `npm run register-vendor` script
+(`agent/scripts/register-vendor.ts`, signs with the legacy keychain, TS only) — tx
+`hQfVNdAN52cjDWpGZzPQD8nxyyQzu3FtLeeb5njiCoU`. No treasury policy was set for it (that is the owner's job in
+`/rules`), which is exactly the state fixture #10 needs. Nothing else on-chain was touched.
+
+Code: `agent/scripts/make-fixtures.ts` (new vendors / amounts), `agent/src/eval.ts` EXPECT table and
+`agent/fixtures/EXPECTED.md` rewritten in sync; `DEFAULT_TREASURY_ID` in `agent/src/near.ts` is now
+`orvantra-treasury-v6.testnet` so `npm run eval` reproduces without `TREASURY_ID`; `npm run chain-state` defaults to
+the four current vendors and prints memos. The old acme/bob files moved to `agent/fixtures-main/legacy-*` (four of
+them are the kept originals of payments #0–#3, `web/lib/server/originals.ts` points there; the web resolves both
+directories). Proof page: the eval lede now names the live treasury and the new vendors; the five refusal entries
+keep their 2026-11-11 tx links but no longer name Acme / Bob, and the "no policy" entry points at fixture #10.
+
+Deployed 2026-11-13 (app only, `railway up`, Railway deployment `c36274b0-a73d-4651-9965-a91f62b45a3c`); the contract
+is unchanged — still `orvantra-treasury-v6.testnet`, `orvantra-registry.testnet`, `orvantra-tusdc.testnet`. Before the
+deploy: `npm run chain-state` re-read the live v6 state (it matched the EXPECTED.md header), fixture #14 was re-rendered
+(the grouped 64-hex account had been edited into `make-fixtures.ts` after the first render, so the readers were still
+seeing a run of identical characters), the owner's `_probe_acme.png` was dropped from `agent/fixtures/`, and
+`npm run eval` reached **15/15 PASS** (one earlier run hit 14/15 on a transient testnet RPC timeout for #4, rerun
+clean). Verified live: `/proof/eval-results.json` is byte-identical to the committed copy (15 rows, 2 propose /
+7 hold / 6 reject, zero `acme`/`bob` strings) and `/proof` returns HTTP 200.

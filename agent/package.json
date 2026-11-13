@@ -20,6 +20,7 @@
     "setup-agent-key": "tsx scripts/setup-agent-key.ts",
     "prove-key-limits": "tsx scripts/prove-key-limits.ts",
     "propose-raw": "tsx scripts/propose-raw.ts",
+    "register-vendor": "tsx scripts/register-vendor.ts",
     "quote": "tsx scripts/quote.ts",
     "oneclick-status": "tsx scripts/oneclick-status.ts",
     "test": "vitest run",

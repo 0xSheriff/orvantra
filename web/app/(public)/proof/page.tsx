@@ -23,7 +23,7 @@ const REFUSALS = [
     title: 'Payout changed — the contract will hold it',
     body: (
       <>
-        Owner raised <code className="m">min_payout_age</code> to 3600 s, then Acme changed its payout on the registry (
+        Owner raised <code className="m">min_payout_age</code> to 3600 s, then a vendor changed its payout on the registry (
         <a href={TX('E3RbWQmTHrYYp53GQyRrVoSKSHjRunvDedXSXbFuRVb1')}>tx</a>). The agent read the live chain and predicted
         before signing: <em>&ldquo;will be held by contract: payout changed less than 3600s ago&rdquo;</em>. The treasury enforces the
         payout-age itself — a changed address can never settle before it is old enough.
@@ -60,12 +60,13 @@ const REFUSALS = [
     ),
   },
   {
-    title: 'Policy removed — rejected before signing',
+    title: 'No policy — rejected before signing',
     body: (
       <>
-        The owner removed Bob&rsquo;s policy (<a href={TX('5gv91hLrWGVgTsSxyAoa3szqAUtykgskWCJ8F783qNcx')}>tx</a>). On the
-        next invoice the agent rejected it client-side — <em>&ldquo;vendor orvantra-bob.testnet is not approved in the
-        treasury policy&rdquo;</em> — and signed nothing.
+        The owner removed a vendor&rsquo;s policy (<a href={TX('5gv91hLrWGVgTsSxyAoa3szqAUtykgskWCJ8F783qNcx')}>tx</a>). On that
+        vendor&rsquo;s next invoice the agent rejected it client-side — <em>&ldquo;not approved in the treasury
+        policy&rdquo;</em> — and signed nothing. The eval above repeats the rule every run: Tidewater Print Co is in the
+        registry (<code className="m">orvantra-tidewater.testnet</code>) but has no policy, so its invoice is rejected.
       </>
     ),
   },
@@ -115,10 +116,12 @@ export default function Proof() {
           <h2 className="lbl">1 · The eval — 15 invoices, two TEE readers, live chain views</h2>
           <p className="pf-lede">
             Each fixture goes through both NEAR AI Cloud readers (provider-TEE-attested, E2EE, signatures verified) and
-            read-only views of the live registry and the eval&rsquo;s target treasury,{' '}
-            <code className="m">orvantra-treasury-v4.testnet</code>. The table below is fetched from{' '}
-            <code className="m">agent/eval-results.json</code> — the output of <code className="m">npm run eval</code>{' '}
-            as of the last deploy.
+            read-only views of the live registry and the live treasury, <code className="m">{treasuryId}</code> — the
+            same vendors you see on the All invoices page (Harbor &amp; Oak, Cloudline Systems, Meridian Freight), with
+            their real paid history as the baseline: a 3x-median hold, a &ldquo;possible duplicate&rdquo; of a paid
+            invoice number, a registered-but-unapproved vendor, an unknown one, and two batch duplicates that share one
+            hash. The table below is fetched from <code className="m">agent/eval-results.json</code> — the output of{' '}
+            <code className="m">npm run eval</code> as of the last deploy; nothing in it is signed or proposed.
           </p>
           <EvalTable />
 
@@ -131,8 +134,9 @@ export default function Proof() {
             ))}
           </ol>
           <p className="pf-note">
-            All five ran on {treasuryId} on 2026-11-11; every setting the demo changed was restored afterwards (tx
-            hashes in <code className="m">docs/DEPLOYMENTS.md</code>).
+            All five ran on {treasuryId} on 2026-11-11 against the vendors of that day; every setting the demo changed
+            was restored afterwards (tx hashes in <code className="m">docs/DEPLOYMENTS.md</code>). The rules are the
+            same ones the eval exercises today.
           </p>
 
           <h2 className="lbl pf-h2">3 · Mainnet and wallet proofs</h2>

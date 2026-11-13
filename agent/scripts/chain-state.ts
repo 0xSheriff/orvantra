@@ -2,7 +2,7 @@
 import * as near from '../src/near.ts';
 
 const cfg = near.nearConfig();
-const vendors = process.argv.slice(2).length ? process.argv.slice(2) : ['orvantra-acme.testnet', 'orvantra-bob.testnet'];
+const vendors = process.argv.slice(2).length ? process.argv.slice(2) : ['orvantra-harboroak.testnet', 'orvantra-cloudline.testnet', 'orvantra-meridian.testnet', 'orvantra-tidewater.testnet'];
 console.log('config', await near.getConfig(cfg));
 for (const v of vendors) {
   console.log(v, {
@@ -13,5 +13,5 @@ for (const v of vendors) {
   });
 }
 for (const p of await near.getPayments(cfg)) {
-  console.log(`#${p.id} ${p.vendor} ${p.amount} ${p.status} direct=${p.direct} reasons=${JSON.stringify(p.reasons)}`);
+  console.log(`#${p.id} ${p.vendor} ${p.amount} ${p.status} memo=${p.memo ?? '-'} direct=${p.direct} reasons=${JSON.stringify(p.reasons)}`);
 }
